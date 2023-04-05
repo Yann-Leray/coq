@@ -561,6 +561,7 @@ let v_rrinfo = v_tuple "rewrite_rule_info"
 let v_rewrule = v_tuple "rewrite_rule"
   [|v_pattern;    (* pattern *)
     v_constr;     (* replacement *)
+    v_list (v_pair v_constr v_constr); (* equations *)
     v_rrinfo|]    (* rewrite_rule_info *)
 
 let v_puniv = v_opt v_int
@@ -603,7 +604,8 @@ let [_v_hpattern;v_elimination;_v_head_elim;_v_patarg] : _ Vector.t =
 let v_machine_rewrule = v_tuple "rewrite_rule"
   [|v_tuple "nvars" [| v_int; v_int; v_int |];
     v_pair (v_instance_mask v_pqvar v_puniv) (v_list v_elimination);
-    v_constr |]
+    v_constr;
+    v_list (v_pair v_constr v_constr) |]
 
 let v_rrb = v_tuple "rewrite_rules_body"
   [|v_list v_rewrule;

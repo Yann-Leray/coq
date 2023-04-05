@@ -16,7 +16,7 @@ let return a : 'a t = ref (Some a)
 let if_valid (r : 'a t) =
   match !r with
   | Some a -> a
-  | None -> invalid_arg "Tried to reuse invalidated NoDupArray."
+  | None -> invalid_arg "Tried to reuse invalidated WriteOnceArray."
 
 (** Non-destructive get operator *)
 let (let+) r f =

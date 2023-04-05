@@ -529,10 +529,16 @@ GRAMMAR EXTEND Gram
         } ]]
   ;
   (* Rewrite Rules *)
+  rr_equation:
+    [ [ l = constr; "="; r = constr -> { l, r } ] ];
+  rr_equations:
+    [ [ "["; e = LIST0 rr_equation SEP ";"; "]" -> { e } ] ];
   rw_pattern:
     [ [ p = lconstr -> { p } ] ];
   rewrite_rule:
-    [ [ lhs = rw_pattern; "=>" ; rhs = lconstr -> { (lhs, rhs) } ] ]
+    [ [ e = [ -> { [] } | e = OPT rr_equations; "|-" -> { Option.default [] e }];
+        lhs = rw_pattern; "=>" ; rhs = lconstr ->
+        { (e, lhs, rhs) } ] ]
   ;
   (* Inductive schemes *)
   scheme:

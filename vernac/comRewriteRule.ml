@@ -111,7 +111,7 @@ let warn_rewrite_rules_break_SR ~loc reason =
 let () = CWarnings.register_printer rewrite_rules_break_SR_msg
   (fun reason -> Pp.(str "This rewrite rule breaks subject reduction " ++ reason))
 
-let interp_rule (pattern, rhs) =
+let interp_rule (eqs, pattern, rhs) =
   let env = Global.env () in
   let evd = Evd.from_env env in
 
@@ -138,6 +138,22 @@ let interp_rule (pattern, rhs) =
       warn_rewrite_rules_break_SR ~loc:rhs_loc
         Pp.(surround (str "the replacement term doesn't have the type of the pattern") ++ str "." ++ fnl () ++ Himsg.explain_pretype_error env' evd' e);
       Pretyping.understand_tcc ~flags env evd rhs
+  in
+
+  let evd', eqs = List.fold_left_map (fun evd (a, b) ->
+    let a_loc = a.CAst.loc in
+    let b_loc = b.CAst.loc in
+    let a = Constrintern.(intern_gen WithoutTypeConstraint env evd a) in
+    let evd, a, ty = Pretyping.understand_tcc_ty ~flags env evd a in
+    let b = Constrintern.(intern_gen WithoutTypeConstraint env evd b) in
+    let evd, b =
+      try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType ty) b
+      with Pretype_errors.PretypeError (env', evd', e) ->
+      warn_rewrite_rules_break_SR ~loc:b_loc
+        Pp.(surround (str "the equation rhs term doesn't have the type of its lhs") ++ str "." ++ fnl () ++ Himsg.explain_pretype_error env' evd' e);
+        Pretyping.understand_tcc ~flags env evd b
+    in
+    evd, (a, a_loc, b, b_loc)) evd' eqs
   in
 
   let checker = let open UnivProblem in function

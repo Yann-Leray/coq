@@ -102,6 +102,8 @@ let check_rewrite_rule env lab rule machine =
   let () = check_inferred_constraints env evd info in
   let () = check_pattern_relevances evd (Relevanceops.relevance_of_term env (j_val j)) in
 
+  (* TODO: Deal with equalities *)
+
   let () =
     let Info info = info in
     let env = push_floating_full_context_set ((Sorts.QVar.Map.domain info.qualities, Univ.Level.Map.domain info.univs), info.ucstrs) env in
