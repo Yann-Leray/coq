@@ -16,7 +16,7 @@ let return a : 'a t = ref (Some a)
 let if_valid (r : 'a t) =
   match !r with
   | Some a -> a
-  | None -> invalid_arg "Tried to reuse invalidated NoDupArray."
+  | None -> invalid_arg "Tried to reuse invalidated WriteOnceArray."
 
 (** Non-destructive get operator *)
 let (let+) r f =
@@ -56,6 +56,13 @@ let add i e a =
   | Some _ -> invalid_arg "Tried to add duplicate in NoDupArray."
   end;
   a
+
+let add_or_conv conv i e a =
+  let- a = a in
+  begin match a.(i) with
+  | None -> a.(i) <- Some e; Some (return a)
+  | Some e0 -> if conv e e0 then Some (return a) else None
+  end
 
 let fill_remaining e a =
   let* a = a in

@@ -17,6 +17,45 @@ type ('term, 'quality, 'univ) t =
 let make (m, n, p) =
   (WriteOnceArray.make m, WriteOnceArray.make n, WriteOnceArray.make p)
 
+let get_term (ts, _, _) n =
+  WriteOnceArray.get (n-1) ts
+
+let get_quality (_, qs, _) n =
+  WriteOnceArray.get n qs
+
+let get_univ (_, _, us) n =
+  WriteOnceArray.get n us
+
+let add_term_or_conv conv i t (ts, qs, us) =
+  match WriteOnceArray.add_or_conv conv i t ts with
+  | Some ts -> Some (ts, qs, us)
+  | None -> None
+
+let maybe_add_term_or_conv conv io t tqus =
+  match io with
+  | Some i -> add_term_or_conv conv i t tqus
+  | None -> Some tqus
+
+let add_quality_or_conv conv i t (ts, qs, us) =
+  match WriteOnceArray.add_or_conv conv i t qs with
+  | Some qs -> Some (ts, qs, us)
+  | None -> None
+
+let maybe_add_quality_or_conv conv io t tqus =
+  match io with
+  | Some i -> add_quality_or_conv conv i t tqus
+  | None -> Some tqus
+
+let add_univ_or_conv conv i t (ts, qs, us) =
+  match WriteOnceArray.add_or_conv conv i t us with
+  | Some us -> Some (ts, qs, us)
+  | None -> None
+
+let maybe_add_univ_or_conv conv io t tqus =
+  match io with
+  | Some i -> add_univ_or_conv conv i t tqus
+  | None -> Some tqus
+
 let add_term i t tqus : ('t, 'q, 'u) t =
   on_pi1 (WriteOnceArray.add (i-1) t) tqus
 

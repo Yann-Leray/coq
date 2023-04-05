@@ -331,6 +331,7 @@ type machine_rewrite_rule = {
   nvars : int * int * int;
   lhs_pat : (int option, int option) instance_mask * pattern_elimination list;
   rhs : constr;
+  equalities : (constr * constr) list;
 }
 
 (** {6 Representation of rewrite rules in the kernel } *)

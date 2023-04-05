@@ -18,6 +18,8 @@ val is_filled : int -> 'a t -> bool
 
 val add : int -> 'a -> 'a t -> 'a t
 
+val add_or_conv : ('a -> 'a -> bool) -> int -> 'a -> 'a t -> 'a t option
+
 val fill_remaining : 'a -> 'a t -> 'a t
 
 val to_array : 'a t -> 'a array

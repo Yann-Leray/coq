@@ -77,7 +77,8 @@ sig
 
   type ('q, 'u) mask = 'q Quality.pattern array * 'u array
 
-  val pattern_match : (int option, int option) mask -> t -> ('term, Quality.t, Level.t) Partial_subst.t -> ('term, Quality.t, Level.t) Partial_subst.t option
+  val pattern_match :  (Quality.t -> Quality.t -> bool) * (Level.t -> Level.t -> bool) ->(int option, int option) mask ->
+    t -> ('term, Quality.t, Level.t) Partial_subst.t -> ('term, Quality.t, Level.t) Partial_subst.t option
   (** Pattern matching, as used by the rewrite rules mechanism *)
 end
 
