@@ -322,6 +322,8 @@ and pattern_argument =
 
 type rewrite_rule = {
   lhs_pat : rewrite_pattern;
+  (* lhs_eqs[i] is j if there is an equation between hole i and hole j. We should always have i > j. *)
+  lhs_eqs : int Int.Map.t;
   rhs : constr;
 }
 
