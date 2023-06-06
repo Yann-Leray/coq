@@ -12,10 +12,10 @@
 (maintainers "The Coq development team <coqdev@inria.fr>")
 (authors "The Coq development team, INRIA, CNRS, and contributors")
 ; This generates bug-reports and dev-repo
-(source (github coq/coq))
+(source (github Yann-Leray/coq))
 (homepage https://coq.inria.fr/)
 (documentation "https://coq.github.io/doc/")
-(version dev)
+(version rewrite-rules.dev)
 
 ; Note that we use coq.opam.template to have dune add the correct opam
 ; prefix for configure
