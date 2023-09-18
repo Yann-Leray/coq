@@ -49,7 +49,7 @@ let check_constant_declaration env opac kn cb opacify =
   let ty = cb.const_type in
   let _ = infer_type env ty in
   let body, env = match cb.const_body with
-    | Undef _ | Primitive _ -> None, env
+    | Undef _ | Primitive _ | Symbol _ -> None, env
     | Def c -> Some c, env
     | OpaqueDef o ->
       let c, u = !indirect_accessor o in
@@ -103,7 +103,7 @@ let rec collect_constants_without_body sign mp accu =
      let c = Constant.make2 mp lab in
      if Declareops.constant_has_body cb then s else Cset.add c s
   | SFBmodule msb -> collect_constants_without_body msb.mod_type (MPdot(mp,lab)) s
-  | SFBmind _ | SFBmodtype _ -> s in
+  | SFBmind _ | SFBrules _ | SFBmodtype _ -> s in
   match sign with
   | MoreFunctor _ -> Cset.empty  (* currently ignored *)
   | NoFunctor struc ->
@@ -180,6 +180,8 @@ and check_structure_field env opac mp lab res opacify = function
   | SFBmodtype mty ->
       check_module_type env mty;
       add_modtype mty env, opac
+  | SFBrules rrb ->
+      Modops.error_rules_not_supported "Mod_checking.check_structure_field" lab
 
 and check_signature env opac sign mp_mse res opacify = match sign with
   | MoreFunctor (arg_id, mtb, body) ->

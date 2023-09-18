@@ -164,7 +164,7 @@ end)
 
 type cbv_infos = {
   env : Environ.env;
-  tab : (cbv_value, Empty.t) Declarations.constant_def KeyTable.t;
+  tab : (cbv_value, Empty.t, bool * Declarations.rewrite_rule list) Declarations.constant_def KeyTable.t;
   reds : RedFlags.reds;
   sigma : Evd.evar_map
 }
@@ -547,6 +547,8 @@ and norm_head_ref k info env stack normt t =
           | RelKey _ | VarKey _ -> assert false
         in
         (PRIMITIVE(op,c,[||]),stack)
+      | Declarations.Symbol _ ->
+         (VAL(0,make_constr_ref k normt t),stack)
       | Declarations.OpaqueDef _ | Declarations.Undef _ ->
          debug_cbv (fun () -> Pp.(str "Not unfolding " ++ debug_pr_key normt));
          (VAL(0,make_constr_ref k normt t),stack)
@@ -678,6 +680,7 @@ and cbv_value_cache info ref =
         Declarations.Def v
       with
       | Environ.NotEvaluableConst (Environ.IsPrimitive (_u,op)) -> Declarations.Primitive op
+      | Environ.NotEvaluableConst (Environ.HasRules (b, r)) -> Declarations.Symbol (b, r)
       | Not_found | Environ.NotEvaluableConst _ -> Declarations.Undef None
     in
     KeyTable.add info.tab ref v; v
