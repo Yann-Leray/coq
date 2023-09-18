@@ -464,21 +464,40 @@ type key =
   | IsKey of CClosure.table_key
   | IsProj of Projection.t * Sorts.relevance * EConstr.constr
 
-let expand_table_key env = function
-  | ConstKey cst -> constant_opt_value_in env cst
-  | VarKey id -> (try named_body id env with Not_found -> None)
+let expand_table_key ts env sigma args = function
+  | ConstKey (cst, u) -> begin
+      let cb = lookup_constant cst env in
+      match cb.const_body with
+      | Def l_body ->
+          Some (subst_instance_constr u (EConstr.of_constr l_body), args)
+      | OpaqueDef _ | Undef _ | Primitive _ -> None
+      | Symbol b ->
+          try
+          let r = match Cmap_env.find_opt cst env.symb_pats with Some r -> r | None -> assert false in
+          let sk = Stack.( append_app args empty ) in
+          let rhs, stack = Reductionops.apply_rules
+            (whd_betaiota_deltazeta_for_iota_state ts env sigma) env sigma (EInstance.make u) r sk
+          in
+          let args' = Stack.list_of_app_stack stack
+            |> (function Some l -> l | None -> assert false)
+            |> Array.of_list in
+          Some (rhs, args')
+        with PatternFailure -> None
+        (* TODO: try unfold fix *)
+      end
+  | VarKey id -> (try named_body id env |> Option.map (fun c -> (EConstr.of_constr c, args)) with Not_found -> None)
   | RelKey _ -> None
 
 let unfold_projection env p r stk =
   let s = Stack.Proj (p,r) in
   s :: stk
 
-let expand_key ts env sigma = function
-  | Some (IsKey k) -> Option.map EConstr.of_constr (expand_table_key env k)
+let expand_key ts env sigma args = function
+  | Some (IsKey k) -> (expand_table_key ts env sigma args k)
   | Some (IsProj (p, r, c)) ->
     let red = Stack.zip sigma (whd_betaiota_deltazeta_for_iota_state ts env sigma
                                (c, unfold_projection env p r []))
-    in if EConstr.eq_constr sigma (EConstr.mkProj (p, r, c)) red then None else Some red
+    in if EConstr.eq_constr sigma (EConstr.mkProj (p, r, c)) red then None else Some (red, args)
   | None -> None
 
 let isApp_or_Proj sigma c =
@@ -1077,27 +1096,27 @@ let rec unify_0_with_initial_metas (sigma,ms,es as subst : subst0) conv_at_top e
         match oracle_order curenv cf1 cf2 with
         | None -> error_cannot_unify curenv sigma (cM,cN)
         | Some true ->
-            (match expand_key flags.modulo_delta curenv sigma cf1 with
-            | Some c ->
+            (match expand_key flags.modulo_delta curenv sigma l1 cf1 with
+            | Some c_l1 ->
                 unirec_rec curenvnb pb opt substn
-                  (whd_betaiotazeta curenv sigma (mkApp(c,l1))) cN
+                  (whd_betaiotazeta curenv sigma (mkApp c_l1)) cN
             | None ->
-                (match expand_key flags.modulo_delta curenv sigma cf2 with
-                | Some c ->
+                (match expand_key flags.modulo_delta curenv sigma l2 cf2 with
+                | Some c_l2 ->
                     unirec_rec curenvnb pb opt substn cM
-                      (whd_betaiotazeta curenv sigma (mkApp(c,l2)))
+                      (whd_betaiotazeta curenv sigma (mkApp c_l2))
                 | None ->
                     error_cannot_unify curenv sigma (cM,cN)))
         | Some false ->
-            (match expand_key flags.modulo_delta curenv sigma cf2 with
-            | Some c ->
+            (match expand_key flags.modulo_delta curenv sigma l2 cf2 with
+            | Some c_l2 ->
                 unirec_rec curenvnb pb opt substn cM
-                  (whd_betaiotazeta curenv sigma (mkApp(c,l2)))
+                  (whd_betaiotazeta curenv sigma (mkApp c_l2))
             | None ->
-                (match expand_key flags.modulo_delta curenv sigma cf1 with
-                | Some c ->
+                (match expand_key flags.modulo_delta curenv sigma l1 cf1 with
+                | Some c_l1 ->
                     unirec_rec curenvnb pb opt substn
-                      (whd_betaiotazeta curenv sigma (mkApp(c,l1))) cN
+                      (whd_betaiotazeta curenv sigma (mkApp c_l1)) cN
                 | None ->
                     error_cannot_unify curenv sigma (cM,cN)))
 
