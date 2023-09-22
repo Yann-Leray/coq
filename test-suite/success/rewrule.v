@@ -1,3 +1,5 @@
+Set Allow Rewrite Rules.
+
 Symbol pplus : nat -> nat -> nat.
 Notation "a ++ b" := (pplus a b).
 
