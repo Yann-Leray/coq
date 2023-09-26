@@ -30,6 +30,7 @@ let constr_flags =
     expand_evars = true;
     program_mode = false;
     polymorphic = false;
+    unify_patvars = true;
   }
 
 let open_constr_no_classes_flags =
@@ -42,6 +43,7 @@ let open_constr_no_classes_flags =
   expand_evars = false;
   program_mode = false;
   polymorphic = false;
+  unify_patvars = true;
   }
 
 let preterm_flags =
@@ -54,6 +56,7 @@ let preterm_flags =
   expand_evars = false;
   program_mode = false;
   polymorphic = false;
+  unify_patvars = true;
   }
 
 (** Standard values *)
