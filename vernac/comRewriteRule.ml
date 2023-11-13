@@ -222,6 +222,72 @@ let rec evar_subst evmap evd k t =
     end
   | _ -> EConstr.map_with_binders evd succ (evar_subst evmap evd) k t
 
+let warn_redex_in_rewrite_rules = "redex-in-rewrite-rules"
+
+let redex_in_rewrite_rules_warning =
+  CWarnings.create_warning ~name:warn_redex_in_rewrite_rules ~default:CWarnings.Enabled ()
+
+let redex_in_rewrite_rules_msg = CWarnings.create_msg redex_in_rewrite_rules_warning ()
+let warn_redex_in_rewrite_rules ~loc redex =
+  CWarnings.warn redex_in_rewrite_rules_msg ?loc redex
+let () = CWarnings.register_printer redex_in_rewrite_rules_msg
+  (fun redex -> Pp.(str "This pattern contains a" ++ redex ++ str " which may prevent this rule from being triggered"))
+
+exception Found
+let rec pattern_noccur = function
+  | head, PEApp args :: elims -> Array.iter pattern_noccur_aux args; pattern_noccur (head, elims)
+  | head, PECase (_, _, ret, brs) :: elims -> pattern_noccur_aux ret; Array.iter pattern_noccur_aux brs; pattern_noccur (head, elims)
+  | head, PEProj _ :: elims -> pattern_noccur (head, elims)
+  | PHLambda (tys, ERigid bod), [] -> Array.iter pattern_noccur_aux tys; pattern_noccur bod
+  | (PHLambda (tys, bod) | PHProd (tys, bod)), [] -> Array.iter pattern_noccur_aux tys; pattern_noccur_aux bod
+  | PHRel 1, [] -> raise Found
+  | (PHRel _ | PHInt _ | PHFloat _ | PHSort _ | PHInd _ | PHConstr _ | PHSymbol _), [] -> ()
+and pattern_noccur_aux = function
+  | EHole | EHoleIgnored -> ()
+  | ERigid p -> pattern_noccur p
+
+let test_lambda_body ~loc (head, elims) =
+  if List.is_empty elims then () else
+  let last_elim, elims = List.sep_last elims in
+  match last_elim with PECase _ | PEProj _ -> ()
+  | PEApp a ->
+  let [@ocaml.warning "-8"] first_args, [|last_arg|] = Array.chop (Array.length a - 1) a in
+  match last_arg with
+  | EHole | EHoleIgnored | ERigid (PHRel 1, []) ->
+    begin try pattern_noccur (head, elims @ [PEApp first_args]);
+        warn_redex_in_rewrite_rules ~loc (Pp.str " subpattern compatible with an eta-long form")
+      with Found -> ()
+    end
+  | _ -> ()
+
+let test_projection_apps env evd ~loc ind args =
+  let specif = Inductive.lookup_mind_specif env ind in
+  if not @@ Inductive.is_primitive_record specif then () else
+  if Array.for_all_i (fun i arg ->
+    match arg with
+    | EHole | EHoleIgnored -> true
+    | ERigid (_, []) -> false
+    | ERigid (_, elims) ->
+      match List.last elims with
+      | PEProj p -> Ind.CanOrd.equal (Projection.inductive p) ind && Projection.arg p = i
+      | _ -> false
+  ) 0 args then
+    warn_redex_in_rewrite_rules ~loc Pp.(str " subpattern compatible with an eta-long form for " ++ Id.print (snd specif).mind_typename ++ str"," )
+
+let rec test_pattern_redex env evd ~loc = function
+  | PHLambda _, PEApp _ :: _ -> warn_redex_in_rewrite_rules ~loc (Pp.str " beta redex")
+  | PHConstr _, (PECase _ | PEProj _) :: _ -> warn_redex_in_rewrite_rules ~loc (Pp.str " iota redex")
+  | PHLambda (_, (EHole | EHoleIgnored)), [] -> warn_redex_in_rewrite_rules ~loc (Pp.str "n eta-long form")
+  | PHConstr (c, _) as head, PEApp args :: elims -> test_projection_apps env evd ~loc (fst c) args; Array.iter (test_pattern_redex_aux env evd ~loc) args; test_pattern_redex env evd ~loc (head, elims)
+  | head, PEApp args :: elims -> Array.iter (test_pattern_redex_aux env evd ~loc) args; test_pattern_redex env evd ~loc (head, elims)
+  | head, PECase (_, _, ret, brs) :: elims -> test_pattern_redex_aux env evd ~loc ret; Array.iter (test_pattern_redex_aux env evd ~loc) brs; test_pattern_redex env evd ~loc (head, elims)
+  | head, PEProj _ :: elims -> test_pattern_redex env evd ~loc (head, elims)
+  | PHLambda (tys, ERigid bod), [] -> test_lambda_body ~loc bod; Array.iter (test_pattern_redex_aux env evd ~loc) tys; test_pattern_redex env evd ~loc bod
+  | PHProd (tys, bod), [] -> Array.iter (test_pattern_redex_aux env evd ~loc) tys; test_pattern_redex_aux env evd ~loc bod
+  | (PHRel _ | PHInt _ | PHFloat _ | PHSort _ | PHInd _ | PHConstr _ | PHSymbol _), [] -> ()
+and test_pattern_redex_aux env evd ~loc = function
+  | EHole | EHoleIgnored -> ()
+  | ERigid p -> test_pattern_redex env evd ~loc p
 
 let interp_rule (udecl, lhs, rhs) =
   let env = Global.env () in
@@ -246,6 +312,7 @@ let interp_rule (udecl, lhs, rhs) =
   let ((_, invtbl), (nvarqs', invtblq), (nvarus', invtblu)), (head_pat, elims) =
     safe_pattern_of_constr ~loc:lhs_loc (env, evd) 0 ((1, Evar.Map.empty), (0, Int.Map.empty), (0, Int.Map.empty)) (EConstr.Unsafe.to_constr lhs)
   in
+  let () = test_pattern_redex env evd ~loc:lhs_loc (head_pat, elims) in
   let _inv_tbl_dbg = Evar.Map.bindings invtbl in
   let head_symbol, head_umask = match head_pat with PHSymbol (symb, mask) -> symb, mask | _ ->
     CErrors.user_err ?loc:lhs_loc
