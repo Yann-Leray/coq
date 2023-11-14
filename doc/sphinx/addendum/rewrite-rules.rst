@@ -119,7 +119,7 @@ Note that if in the production, the context was extended with a variable bearing
 
       Symbol id : forall (A : Type), A -> A.
       Rewrite Rule id_rew :=
-         id (forall x, ?P) (fun (x : ?A) => ?f) ==> fun (x : ?A) => id ?P ?f.
+         id (forall (x : ?A), ?P) ?f ==> fun (x : ?A) => id ?P (?f x).
 
 Rewrite rules, type preservation, confluence and termination
 ------------------------------------------------------------
