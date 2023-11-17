@@ -487,6 +487,34 @@ let subst_instance_context s ctx =
         RelDecl.map_constr (subst_instance_constr s) d)
       ctx
 
+let universe_level_var_index u =
+  match Univ.Universe.level u with
+    | None -> None
+    | Some lvl -> Univ.Level.var_index lvl
+
+let subst_algs_universe s univ =
+  match universe_level_var_index univ with
+  | Some lvl -> s.(lnot lvl)
+  | None ->
+    if Univ.Universe.exists
+      (fun (lvl, _) ->
+        Option.cata (fun x -> x < 0) false (Univ.Level.var_index lvl)) univ then
+      CErrors.anomaly (Pp.str "Algebraic universe variable could not be substituted")
+    else
+      univ
+
+let subst_algs_constr subst c =
+  if Array.length subst = 0 then c
+  else
+    let rec aux t =
+      match kind t with
+      | Sort s ->
+        let s' = Sorts.subst_fn ((fun q -> Sorts.Quality.QVar q), (subst_algs_universe subst)) s in
+        if s' == s then t else mkSort s'
+      | _ -> Constr.map aux t
+    in
+    aux c
+
 let add_qvars_and_univs_of_instance (qs,us) u =
   let qs', us' = UVars.Instance.to_array u in
   let qs = Array.fold_left (fun qs q ->

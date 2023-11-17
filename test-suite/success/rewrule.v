@@ -1,4 +1,14 @@
 Set Allow Rewrite Rules.
+Set Universe Polymorphism.
+Symbol eq@{u} eq': forall (T : Type@{u}), T -> T -> Type@{u}.
+
+Rewrite Rule eq_rew := eq ?A ?x ?y ==> eq' ?A ?y ?x.
+Monomorphic Universe u v w.
+Set Printing Universes.
+
+Rewrite Rule eq_rew' := @{a b c} |- eq@{c} Type@{a} Type@{b} unit ==> (Type@{a} + Type@{b})%type.
+
+Eval compute in eq Type@{u} Type@{v} unit.
 
 Symbol pplus : nat -> nat -> nat.
 Notation "a ++ b" := (pplus a b).

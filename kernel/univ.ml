@@ -188,7 +188,7 @@ module Level = struct
   let vars = Array.init 20 (fun i -> make (Var i))
 
   let var n =
-    if n < 20 then vars.(n) else make (Var n)
+    if 0 <= n && n < 20 then vars.(n) else make (Var n)
 
   let var_index u =
     match data u with

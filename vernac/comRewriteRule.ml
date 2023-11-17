@@ -67,7 +67,7 @@ open Util
 open Constr
 open Declarations
 
-type state = (int * int Evar.Map.t) * (int * int Int.Map.t) * (int * int Int.Map.t)
+type state = (int * int Evar.Map.t) * (int * int Int.Map.t) * (int * int * int Int.Map.t)
 
 let update_invtbl ~loc env evd evk (curvar, tbl) =
   succ curvar, tbl |> Evar.Map.update evk @@ function
@@ -81,8 +81,8 @@ let update_invtbl ~loc env evd evk (curvar, tbl) =
           ++ str" but used here for hole " ++ int curvar
           ++ str".")
 
-let update_invtblu1 ~loc evd lvl (curvaru, tbl) =
-  succ curvaru, tbl |> Int.Map.update lvl @@ function
+let update_invtblu1 ~loc evd lvl (curvaru, curvara, invtblu) =
+  succ curvaru, curvara, invtblu |> Int.Map.update lvl @@ function
     | None -> Some curvaru
     | Some k as c when k = curvaru -> c
     | Some k ->
@@ -91,6 +91,18 @@ let update_invtblu1 ~loc evd lvl (curvaru, tbl) =
             ++ Termops.pr_evd_level evd (Univ.Level.var lvl)
             ++ str" already taken for hole " ++ int k
             ++ str" but used here for hole " ++ int curvaru
+            ++ str".")
+
+let update_invtbla1 ~loc evd lvl (curvaru, curvara, invtblu) =
+  curvaru, succ curvara, invtblu |> Int.Map.update lvl @@ function
+    | None -> Some (lnot curvara)
+    | Some k as c when k = lnot curvara -> c
+    | Some k ->
+        CErrors.user_err ?loc
+          Pp.(str "Universe variable "
+            ++ Termops.pr_evd_level evd (Univ.Level.var lvl)
+            ++ str" already taken for hole " ++ int k
+            ++ str" but used here for hole " ++ int curvara
             ++ str".")
 
 let update_invtblq1 ~loc evd q (curvarq, tbl) =
@@ -122,20 +134,35 @@ let update_invtblu ~loc evd (state, stateq, stateu : state) u : state * _ =
   let mask = if Array.exists Fun.id maskq || Array.exists Fun.id masku then Some (maskq, masku) else None in
   (state, stateq, stateu), mask
 
+let universe_level_var_index u =
+  match Univ.Universe.level u with
+    | None -> None
+    | Some lvl -> Univ.Level.var_index lvl
+
 let safe_sort_pattern_of_sort ~loc evd (st, sq, su as state) s =
   let open Sorts in
   match s with
-  | Type u -> state, PSType
+  | Type u ->
+      begin match universe_level_var_index u with
+      | None -> state, PSType false
+      | Some lvl ->
+        (st, sq, update_invtbla1 ~loc evd lvl su), PSType true
+      end
   | SProp -> state, PSSProp
   | Prop -> state, PSProp
   | Set -> state, PSSet
   | QSort (q, u) ->
-      match Sorts.QVar.var_index q with
-      | Some q ->
-        let stateq = update_invtblq1 ~loc evd q sq in
-        (st, stateq, su), PSQSort true
-      | None ->
-        state, PSQSort false
+      let sq, bq =
+        match Sorts.QVar.var_index q with
+        | Some q -> update_invtblq1 ~loc evd q sq, true
+        | None -> sq, false
+      in
+      let su, ba =
+        match universe_level_var_index u with
+        | Some lvl -> update_invtbla1 ~loc evd lvl su, true
+        | None -> su, false
+      in
+      (st, sq, su), PSQSort (bq, ba)
 
 
 let rec safe_pattern_of_constr ~loc env depth state t = Constr.kind t |> function
@@ -319,8 +346,8 @@ let interp_rule (udecl, lhs, rhs) =
 
   let lhs = Vars.subst_univs_level_constr usubst (EConstr.Unsafe.to_constr lhs) in
 
-  let ((nvars', invtbl), (nvarqs', invtblq), (nvarus', invtblu)), (head_pat, elims) =
-    safe_pattern_of_constr ~loc:lhs_loc (env, evd) 0 ((1, Evar.Map.empty), (0, Int.Map.empty), (0, Int.Map.empty)) lhs
+  let ((nvars', invtbl), (nvarqs', invtblq), (nvarus', nvaras', invtblu)), (head_pat, elims) =
+    safe_pattern_of_constr ~loc:lhs_loc (env, evd) 0 ((1, Evar.Map.empty), (0, Int.Map.empty), (0, 0, Int.Map.empty)) lhs
   in
   let () = test_pattern_redex env evd ~loc:lhs_loc (head_pat, elims) in
   let _inv_tbl_dbg = Evar.Map.bindings invtbl in
@@ -328,8 +355,8 @@ let interp_rule (udecl, lhs, rhs) =
     CErrors.user_err ?loc:lhs_loc
     Pp.(str "Head pattern is not a symbol.")
   in
-  if nvarus <> nvarus' then begin
-    assert (nvarus' < nvarus);
+  if nvarus <> nvarus' + nvaras' then begin
+    assert (nvarus' + nvaras' < nvarus);
     CErrors.user_err ?loc:lhs_loc
       Pp.(str "Not all universe level variables appear in the lhs")
   end;
