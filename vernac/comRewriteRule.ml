@@ -115,7 +115,7 @@ let update_invtblu ~loc evd (state, stateq, stateu : state) u : state * _ =
   in
   let stateq, mask2 = Array.fold_left_map (fun (curvarq, invtblq) qvar ->
     match Sorts.Quality.var_index qvar with
-    | Some lvl -> update_invtblu1 ~loc evd lvl curvarq invtblq, true
+    | Some lvl -> update_invtblq1 ~loc evd lvl curvarq invtblq, true
     | None -> (curvarq, invtblq), false
   ) stateq q
 in
