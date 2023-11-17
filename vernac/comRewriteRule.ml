@@ -93,7 +93,7 @@ let update_invtblu1 ~loc evd lvl (curvaru, tbl) =
             ++ str" but used here for hole " ++ int curvaru
             ++ str".")
 
-let update_invtblq1 ~loc evd q curvarq tbl =
+let update_invtblq1 ~loc evd q (curvarq, tbl) =
   succ curvarq, tbl |> Int.Map.update q @@ function
     | None -> Some curvarq
     | Some k as c when k = curvarq -> c
@@ -107,22 +107,22 @@ let update_invtblq1 ~loc evd q curvarq tbl =
 
 let update_invtblu ~loc evd (state, stateq, stateu : state) u : state * _ =
   let (q, u) = u |> UVars.Instance.to_array in
-  let stateu, mask = Array.fold_left_map (fun stateu lvl ->
+  let stateq, maskq = Array.fold_left_map (fun stateq qvar ->
+    match Sorts.Quality.var_index qvar with
+    | Some lvl -> update_invtblq1 ~loc evd lvl stateq, true
+    | None -> stateq, false
+  ) stateq q
+  in
+  let stateu, masku = Array.fold_left_map (fun stateu lvl ->
       match Univ.Level.var_index lvl with
       | Some lvl -> update_invtblu1 ~loc evd lvl stateu, true
       | None -> stateu, false
     ) stateu u
   in
-  let stateq, mask2 = Array.fold_left_map (fun (curvarq, invtblq) qvar ->
-    match Sorts.Quality.var_index qvar with
-    | Some lvl -> update_invtblq1 ~loc evd lvl curvarq invtblq, true
-    | None -> (curvarq, invtblq), false
-  ) stateq q
-in
-  let mask = if Array.exists Fun.id mask || Array.exists Fun.id mask2 then Some (mask, mask2) else None in
+  let mask = if Array.exists Fun.id maskq || Array.exists Fun.id masku then Some (maskq, masku) else None in
   (state, stateq, stateu), mask
 
-let safe_sort_pattern_of_sort ~loc evd (st, (curvarq, invtblq), su as state) s =
+let safe_sort_pattern_of_sort ~loc evd (st, sq, su as state) s =
   let open Sorts in
   match s with
   | Type u -> state, PSType
@@ -132,7 +132,7 @@ let safe_sort_pattern_of_sort ~loc evd (st, (curvarq, invtblq), su as state) s =
   | QSort (q, u) ->
       match Sorts.QVar.var_index q with
       | Some q ->
-        let stateq = update_invtblq1 ~loc evd q curvarq invtblq in
+        let stateq = update_invtblq1 ~loc evd q sq in
         (st, stateq, su), PSQSort true
       | None ->
         state, PSQSort false
@@ -333,6 +333,11 @@ let interp_rule (udecl, lhs, rhs) =
     CErrors.user_err ?loc:lhs_loc
       Pp.(str "Not all universe level variables appear in the lhs")
   end;
+  if nvarqs <> nvarqs' then begin
+    assert (nvarqs' < nvarqs);
+    CErrors.user_err ?loc:lhs_loc
+      Pp.(str "Not all sort variables appear in the lhs")
+  end;
 
   let update_invtbl evd evk n invtbl =
     let Evd.EvarInfo evi = Evd.find evd evk in
@@ -367,7 +372,7 @@ let interp_rule (udecl, lhs, rhs) =
         Pp.(str "Universe level variable" ++ Termops.pr_evd_level evd lvl ++ str " appears in rhs but does not appear in the pattern.")
   ));
   let usubst = UVars.Instance.of_array
-    (Array.init nvarus (fun i -> Sorts.Quality.var (Option.default i (Int.Map.find_opt i invtblu))),
+    (Array.init nvarqs (fun i -> Sorts.Quality.var (Option.default i (Int.Map.find_opt i invtblq))),
      Array.init nvarus (fun i -> Univ.Level.var (Option.default i (Int.Map.find_opt i invtblu))))
   in
   let rhs = Vars.subst_instance_constr usubst rhs in
