@@ -880,8 +880,8 @@ let subst_instance_context subst ctx =
 let subst_instance_constr subst c =
   of_constr (Vars.subst_instance_constr subst (to_constr c))
 
-let subst_algs_constr subst c =
-  of_constr (Vars.subst_algs_constr subst (to_constr c))
+let subst_algs_constr asubst subst c =
+  of_constr (Vars.subst_algs_constr asubst subst (to_constr c))
 
 (** Operations that dot NOT commute with evar-normalization *)
 let noccurn sigma n term =

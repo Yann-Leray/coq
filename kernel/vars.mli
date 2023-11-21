@@ -200,7 +200,8 @@ val subst_instance_context : Instance.t -> Constr.rel_context -> Constr.rel_cont
 val univ_instantiate_constr : Instance.t -> constr univ_abstracted -> constr
 (** Ignores the constraints carried by [univ_abstracted]. *)
 
-val subst_algs_constr : Univ.Universe.t array -> types -> types
+val subst_algs_constr : Univ.Universe.t array -> Instance.t -> constr -> constr
+val iter_on_instance : (Instance.t -> unit) -> (Univ.Universe.t -> unit) -> constr -> unit
 
 val map_constr_relevance : (Sorts.relevance -> Sorts.relevance) -> Constr.t -> Constr.t
 (** Modifies the relevances in the head node (not in subterms) *)

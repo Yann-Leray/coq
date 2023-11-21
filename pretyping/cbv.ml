@@ -890,8 +890,7 @@ and cbv_apply_rules info env u r stk =
       let (fs, fqs, fus, fas), stk = cbv_apply_rule info env ([], [], [], []) [] elims stk in
       let fqus, fuus = match_instance pu u in
       let usubst = UVars.Instance.of_array (Array.of_list (fqus @ fqs), Array.of_list (fuus @ fus)) in
-      let rhs = subst_algs_constr (Array.of_list fas) rhs in
-      let rhsu = subst_instance_constr usubst rhs in
+      let rhsu = subst_algs_constr (Array.of_list fas) usubst rhs in
       let subst = List.fold_right subs_cons fs env in
       let rhs' = cbv_stack_term info TOP subst rhsu in
       rhs', stk

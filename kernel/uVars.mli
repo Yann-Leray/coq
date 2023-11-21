@@ -212,6 +212,7 @@ val subst_sort_level_relevance : sort_level_subst -> Sorts.relevance -> Sorts.re
 val subst_instance_instance : Instance.t -> Instance.t -> Instance.t
 val subst_instance_universe : Instance.t -> Universe.t -> Universe.t
 val subst_instance_sort : Instance.t -> Sorts.t -> Sorts.t
+val subst_abstract_instance_sort : Universe.t array -> Instance.t -> Sorts.t -> Sorts.t
 val subst_instance_relevance : Instance.t -> Sorts.relevance -> Sorts.relevance
 
 val make_instance_subst : Instance.t -> sort_level_subst

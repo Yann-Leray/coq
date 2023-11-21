@@ -487,33 +487,66 @@ let subst_instance_context s ctx =
         RelDecl.map_constr (subst_instance_constr s) d)
       ctx
 
-let universe_level_var_index u =
-  match Univ.Universe.level u with
-    | None -> None
-    | Some lvl -> Univ.Level.var_index lvl
-
-let subst_algs_universe s univ =
-  match universe_level_var_index univ with
-  | Some lvl -> s.(lnot lvl)
-  | None ->
-    if Univ.Universe.exists
-      (fun (lvl, _) ->
-        Option.cata (fun x -> x < 0) false (Univ.Level.var_index lvl)) univ then
-      CErrors.anomaly (Pp.str "Algebraic universe variable could not be substituted")
-    else
-      univ
-
-let subst_algs_constr subst c =
-  if Array.length subst = 0 then c
+let subst_algs_constr asubst subst c =
+  if Array.length asubst = 0 && UVars.Instance.is_empty subst then c
   else
+    let f u = UVars.subst_instance_instance subst u in
     let rec aux t =
+      let t = if CArray.is_empty (fst (UVars.Instance.to_array subst)) then t
+        else map_constr_relevance (UVars.subst_instance_relevance subst) t
+      in
       match kind t with
+      | Const (c, u) ->
+       if UVars.Instance.is_empty u then t
+       else
+          let u' = f u in
+           if u' == u then t
+           else (mkConstU (c, u'))
+      | Ind (i, u) ->
+       if UVars.Instance.is_empty u then t
+       else
+         let u' = f u in
+           if u' == u then t
+           else (mkIndU (i, u'))
+      | Construct (c, u) ->
+       if UVars.Instance.is_empty u then t
+       else
+          let u' = f u in
+           if u' == u then t
+           else (mkConstructU (c, u'))
       | Sort s ->
-        let s' = Sorts.subst_fn ((fun q -> Sorts.Quality.QVar q), (subst_algs_universe subst)) s in
+        let s' = UVars.subst_abstract_instance_sort asubst subst s in
         if s' == s then t else mkSort s'
+
+      | Case (ci, u, pms, p, iv, c, br) ->
+        let u' = f u in
+        if u' == u then Constr.map aux t
+        else Constr.map aux (mkCase (ci,u',pms,p,iv,c,br))
+
+      | Array (u,elems,def,ty) ->
+        let u' = f u in
+        let elems' = CArray.Smart.map aux elems in
+        let def' = aux def in
+        let ty' = aux ty in
+        if u == u' && elems == elems' && def == def' && ty == ty' then t
+        else mkArray (u',elems',def',ty')
+
       | _ -> Constr.map aux t
     in
     aux c
+
+let iter_on_instance f fs c =
+  let rec aux c =
+    match kind c with
+    | Const (_, u) | Ind (_, u) | Construct (_,u) -> f u
+    | Sort (Sorts.Type u) -> fs u
+    | Sort (Sorts.QSort (_,u)) -> fs u
+    | Array (u,_,_,_) -> f u;
+      Constr.iter aux c
+    | Case (_, u, _, _, _,_ ,_) -> f u;
+      Constr.iter aux c
+    | _ -> Constr.iter aux c
+  in aux c
 
 let add_qvars_and_univs_of_instance (qs,us) u =
   let qs', us' = UVars.Instance.to_array u in

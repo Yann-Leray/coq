@@ -1619,8 +1619,8 @@ and match_main : 'a. _ -> _ -> pat_state:(fconstr, stack, _, 'a) depth -> _ -> _
     | Some { subst; usubst = (qsubst, usubst, asubst) ; rhs } ->
         let subst = List.fold_right subs_cons subst (subs_id 0) in
         let usubst = UVars.Instance.of_array (Array.of_list qsubst, Array.of_list usubst) in
-        let rhs = Vars.subst_algs_constr (Array.of_list asubst) rhs in
-        let m' = mk_clos (subst, usubst) rhs in
+        let rhs = Vars.subst_algs_constr (Array.of_list asubst) usubst rhs in
+        let m' = mk_clos (subst, UVars.Instance.empty) rhs in
         begin match pat_state with
         | Nil Yes (k, _) -> k (m', stack)
         | _ -> kni info tab ~pat_state m' stack

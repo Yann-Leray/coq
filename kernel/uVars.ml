@@ -259,6 +259,25 @@ let subst_instance_universe s univ =
 let subst_instance_sort u s =
   Sorts.subst_fn ((subst_instance_qvar u), (subst_instance_universe u)) s
 
+let universe_level_var_index u =
+  match Univ.Universe.level u with
+    | None -> None
+    | Some lvl -> Univ.Level.var_index lvl
+
+let subst_algs_universe asubst subst univ =
+  match universe_level_var_index univ with
+  | Some lvl when lvl < 0 -> asubst.(lnot lvl)
+  | _ ->
+    if Univ.Universe.exists
+      (fun (lvl, _) ->
+        Option.cata (fun x -> x < 0) false (Univ.Level.var_index lvl)) univ then
+      CErrors.anomaly (Pp.str "Algebraic universe variable could not be substituted")
+    else
+      subst_instance_universe subst univ
+
+let subst_abstract_instance_sort asubst subst s =
+  Sorts.subst_fn (subst_instance_qvar subst, subst_algs_universe asubst subst) s
+
 let subst_instance_relevance u r =
   Sorts.relevance_subst_fn (subst_instance_qvar u) r
 

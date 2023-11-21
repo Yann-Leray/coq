@@ -99,9 +99,9 @@ let update_invtbla1 ~loc evd lvl (curvaru, curvara, invtblu) =
     | Some k as c when k = lnot curvara -> c
     | Some k ->
         CErrors.user_err ?loc
-          Pp.(str "Universe variable "
+          Pp.(str "Algebraic universe variable "
             ++ Termops.pr_evd_level evd (Univ.Level.var lvl)
-            ++ str" already taken for hole " ++ int k
+            ++ str" already taken for hole " ++ int (lnot k)
             ++ str" but used here for hole " ++ int curvara
             ++ str".")
 
@@ -326,8 +326,8 @@ let interp_rule (udecl, lhs, rhs) =
 
   let lhs = Constrintern.(intern_gen WithoutTypeConstraint ~pattern_mode:true env evd lhs) in
   let flags = { Pretyping.no_classes_no_fail_inference_flags with unify_patvars = false; expand_evars = false; solve_unification_constraints = false } in
-  let evd, lhs = Pretyping.understand_tcc ~flags env evd lhs in
-  (* let evd, lhs, typ = Pretyping.understand_tcc_ty ~flags env evd lhs in *)
+  (* let evd, lhs = Pretyping.understand_tcc ~flags env evd lhs in *)
+  let evd, lhs, typ = Pretyping.understand_tcc_ty ~flags env evd lhs in
   (* let patvars, lhs = Constrintern.intern_constr_pattern env evd lhs in *)
 
   let evd = Evd.minimize_universes evd in
@@ -374,7 +374,7 @@ let interp_rule (udecl, lhs, rhs) =
 
   let rhs = Constrintern.(intern_gen WithoutTypeConstraint env evd rhs) in
   let flags = { Pretyping.no_classes_no_fail_inference_flags with unify_patvars = false } in
-  let evd, rhs = Pretyping.understand_tcc ~flags env evd (* ~expected_type:(OfType typ) *) rhs in
+  let evd, rhs = Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType typ) rhs in
   let invtbl = Evar.Map.fold (update_invtbl evd) invtbl Evar.Map.empty in
 
   let rhs = evar_subst invtbl evd 0 rhs in
@@ -391,7 +391,7 @@ let interp_rule (udecl, lhs, rhs) =
   qvars |> Sorts.QVar.Set.iter (fun lvl -> lvl |> Sorts.QVar.var_index |> Option.iter (fun lvli ->
     if not (Int.Map.mem lvli invtblu) then
       CErrors.user_err ?loc:rhs_loc
-        Pp.(str "Universe level variable" ++ Termops.pr_evd_qvar evd lvl ++ str " appears in rhs but does not appear in the pattern.")
+        Pp.(str "Sort quality variable" ++ Termops.pr_evd_qvar evd lvl ++ str " appears in rhs but does not appear in the pattern.")
   ));
   uvars |> Univ.Level.Set.iter (fun lvl -> lvl |> Univ.Level.var_index |> Option.iter (fun lvli ->
     if not (Int.Map.mem lvli invtblu) then
@@ -403,6 +403,17 @@ let interp_rule (udecl, lhs, rhs) =
      Array.init nvarus (fun i -> Univ.Level.var (Option.default i (Int.Map.find_opt i invtblu))))
   in
   let rhs = Vars.subst_instance_constr usubst rhs in
+
+  let test_level lvl =
+    match Univ.Level.var_index lvl with
+    | Some n when n < 0 ->
+      let lvl = Int.Map.bindings invtblu |> List.find_opt (fun (a, b) -> b = n) |> Option.cata fst n |> Univ.Level.var in
+      CErrors.user_err ?loc:rhs_loc
+        Pp.(str "Algebraic universe variable" ++ Termops.pr_evd_level evd lvl ++ str " appears in rhs as a universe level variable.")
+    | _ -> ()
+  in
+
+  let () = Vars.iter_on_instance (fun u -> UVars.Instance.to_array u |> snd |> Array.iter test_level) ignore rhs in
 
   head_symbol, { lhs_pat = head_umask, elims; rhs }
 

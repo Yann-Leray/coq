@@ -1,14 +1,29 @@
 Set Allow Rewrite Rules.
-Set Universe Polymorphism.
-Symbol eq@{u} eq': forall (T : Type@{u}), T -> T -> Type@{u}.
 
-Rewrite Rule eq_rew := eq ?A ?x ?y ==> eq' ?A ?y ?x.
-Monomorphic Universe u v w.
 Set Printing Universes.
 
-Rewrite Rule eq_rew' := @{a b c} |- eq@{c} Type@{a} Type@{b} unit ==> (Type@{a} + Type@{b})%type.
+#[unfold_fix]
+Symbol unk@{a} : forall P: Type@{a}, P.
+#[unfold_fix]
+Symbol ty_prec@{i} : forall (A B : Type@{i}), SProp.
+#[unfold_fix]
+Symbol tm_prec@{i} : forall {A B : Type@{i}}, A -> B -> SProp.
 
-Eval compute in eq Type@{u} Type@{v} unit.
+Record ssig {A : SProp} {P : A -> SProp} : SProp := { sfst : A; ssnd : P sfst }.
+Notation "A ∧ B" := (@ssig A (fun _ => B)) (at level 55, right associativity).
+
+Rewrite Rules prec_types := @{b c} |- @tm_prec Type@{b} Type@{c} ?A ?B ==> ty_prec ?A ?B ∧ ty_prec ?A (unk Type@{b}).
+
+Definition fst@{a} {A B : Type@{a}} (H : @tm_prec _ _ A B) :=
+  match H return (ty_prec A B) with
+ | Build_ssig _ _ sfst ssnd =>
+     (fun (sfst0 : ty_prec A B) (ssnd0 : ty_prec A (unk Type@{a})) => sfst0) sfst ssnd
+ end.
+
+Print Universes Subgraph (fst.a tm_prec.i ty_prec.i unk.a).
+
+Lemma tm_prec_implies_ty_prec' : forall {A B : Type}, @tm_prec _ _ A B -> ty_prec A B.
+Proof. intros. cbn in H. destruct H. assumption. Defined.
 
 Symbol pplus : nat -> nat -> nat.
 Notation "a ++ b" := (pplus a b).

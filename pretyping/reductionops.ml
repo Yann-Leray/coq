@@ -796,8 +796,7 @@ let rec apply_rules whrec env sigma u r stk =
       let (fs, fqs, fus, fas), stk = apply_rule whrec env sigma ([], [], [], []) [] elims stk in
       let fqus, fuus = match_einstance sigma pu u in
       let usubst = UVars.Instance.of_array (Array.of_list (fqus @ fqs), Array.of_list (fuus @ fus)) in
-      let rhs = subst_algs_constr (Array.of_list fas) (EConstr.of_constr rhs) in
-      let rhsu = subst_instance_constr usubst rhs in
+      let rhsu = subst_algs_constr (Array.of_list fas) usubst (EConstr.of_constr rhs) in
       let rhs' = substl fs rhsu in
       (rhs', stk)
     with PatternFailure -> apply_rules whrec env sigma u rs stk
