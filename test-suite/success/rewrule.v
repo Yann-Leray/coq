@@ -1,6 +1,32 @@
 Set Allow Rewrite Rules.
-
+Set Universe Polymorphism.
 Set Printing Universes.
+
+Monomorphic Universes u u0 u1 u2 u3 u4 u5.
+
+#[universes(polymorphic)] Cumulative Inductive I@{u} : Type@{u} := C.
+
+Definition a : @eq Type@{u3} I@{u4} I@{u5} := (@eq_refl Type@{u2} I@{u1} : I@{u} = I@{u0}).
+Print a.
+
+
+Check let A1 := (fun _ _ _ _ => 0) ?a ?[B] ?[C] ?[D] in
+  let A2 : ?B := ?a in
+  let A25 : I@{u0} := ?a in
+  let A3 := (?a : ?C) in
+  let A4 : I@{u1} := ?a in
+  let A5 := (?a : ?D) in
+  0.
+
+
+Symbol J : forall (A : Type) (a : A) (P : A -> Type), P a -> forall (a' : A), @eq A a a' -> P a'.
+Rewrite Rule a := J ?A ?B ?C ?H ?D (@eq_refl _ _) ==> ?H.
+
+
+
+
+
+
 
 #[unfold_fix]
 Symbol unk@{a} : forall P: Type@{a}, P.
@@ -11,6 +37,8 @@ Symbol tm_prec@{i} : forall {A B : Type@{i}}, A -> B -> SProp.
 
 Record ssig {A : SProp} {P : A -> SProp} : SProp := { sfst : A; ssnd : P sfst }.
 Notation "A ∧ B" := (@ssig A (fun _ => B)) (at level 55, right associativity).
+
+Rewrite Rule prec_rew := @{i} |- @ty_prec@{i} (forall (a : ?A), ?B) ==> 0.
 
 Rewrite Rules prec_types := @{b c} |- @tm_prec Type@{b} Type@{c} ?A ?B ==> ty_prec ?A ?B ∧ ty_prec ?A (unk Type@{b}).
 

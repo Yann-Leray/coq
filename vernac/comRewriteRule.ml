@@ -165,7 +165,7 @@ let safe_sort_pattern_of_sort ~loc evd (st, sq, su as state) s =
       (st, sq, su), PSQSort (bq, ba)
 
 
-let rec safe_pattern_of_constr ~loc env depth state t = Constr.kind t |> function
+let rec safe_pattern_of_constr ~loc env depth state t = Constr.kind_nocast t |> function
   | App (f, args) ->
       let state, (head, elims) = safe_pattern_of_constr ~loc env depth state f in
       let state, pargs = Array.fold_left_map (safe_arg_pattern_of_constr ~loc env depth) state args in
@@ -183,7 +183,7 @@ let rec safe_pattern_of_constr ~loc env depth state t = Constr.kind t |> functio
       let state, head = safe_head_pattern_of_constr ~loc env depth state t in
       state, (head, [])
 
-and safe_head_pattern_of_constr ~loc env depth state t = Constr.kind t |> function
+and safe_head_pattern_of_constr ~loc env depth state t = Constr.kind_nocast t |> function
   | Const (c, u) when Environ.is_symbol (fst env) c ->
     let state, mask = update_invtblu ~loc (snd env) state u in
     state, PHSymbol (c, mask)
@@ -216,7 +216,7 @@ and safe_head_pattern_of_constr ~loc env depth state t = Constr.kind t |> functi
   | _ ->
     CErrors.user_err ?loc Pp.(str "Subterm not recognised as pattern: " ++ Printer.safe_pr_lconstr_env (fst env) (snd env) t)
 
-and safe_arg_pattern_of_constr ~loc (env, evd as envevd) depth (st, stateq, stateu as state) t = Constr.kind t |> function
+and safe_arg_pattern_of_constr ~loc (env, evd as envevd) depth (st, stateq, stateu as state) t = Constr.kind_nocast t |> function
   | Evar (evk, inst) ->
     let EvarInfo evi = Evd.find evd evk in
     (match snd (Evd.evar_source evi) with
@@ -333,7 +333,7 @@ let interp_rule (udecl, lhs, rhs) =
   let evd = Evd.minimize_universes evd in
   let _qvars, uvars = EConstr.universes_of_constr evd lhs in
   let evd = Evd.restrict_universe_context evd uvars in
-  let univs = Evd.check_univ_decl ~poly evd udecl in
+  let univs = Evd.check_univ_decl ~poly evd udecl in (* TODO *)
 
   let (nvarqs, nvarus), usubst =
     match fst univs with
