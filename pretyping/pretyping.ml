@@ -220,7 +220,7 @@ let sort_info ?loc sigma q l = match l with
   let (sigma, u) = get_level sigma u n in
   let (sigma, u) = List.fold_left fold (sigma, u) us in
   let s = match q with
-    | None -> Sorts.sort_of_univ u
+    | None -> Sorts.mkType u
     | Some q -> Sorts.qsort q u
   in
   sigma, s
@@ -514,7 +514,7 @@ let pretype_ref ?loc sigma env ref us =
 let sort ?loc evd : glob_sort -> _ = function
   | UAnonymous {rigid} ->
     let evd, l = new_univ_level_variable ?loc rigid evd in
-    evd, ESorts.make (Sorts.sort_of_univ (Univ.Universe.make l))
+    evd, ESorts.make (Sorts.mkType (Univ.Universe.make l))
   | UNamed (q, l) ->
     let evd, s = sort_info ?loc evd q l in
     evd, ESorts.make s
@@ -1387,7 +1387,7 @@ let pretype_type self c ?loc ~flags valcon (env : GlobEnv.t) sigma = match DAst.
     | Some u -> sigma, u
     | None -> Evd.new_univ_level_variable UState.univ_flexible sigma
     in
-    let sigma = Evd.set_leq_sort !!env sigma jty.utj_type (ESorts.make (Sorts.sort_of_univ (Univ.Universe.make u))) in
+    let sigma = Evd.set_leq_sort !!env sigma jty.utj_type (ESorts.make (Sorts.mkType (Univ.Universe.make u))) in
     let sigma, jdef = eval_pretyper self ~flags (mk_tycon jty.utj_val) env sigma def in
     let pretype_elem = eval_pretyper self ~flags (mk_tycon jty.utj_val) env in
     let sigma, jt = Array.fold_left_map pretype_elem sigma t in
