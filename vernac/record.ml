@@ -555,6 +555,12 @@ let declare_proj_coercion_instance ~flags ref from =
 let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
     paramargs decl impls {CAst.v=fid; loc} subst nfi ti i indsp mib lifted_fields x rp =
   let ccl = subst_projection fid subst ti in
+  let qu =
+    let sigma = Evd.from_env env in
+    let s = Retyping.get_sort_of env sigma (EConstr.of_constr ti) in
+    let sigma, qu = Evd.fresh_geq_qualuniv_of_sort env sigma s in
+    EConstr.EQualUniv.(kind sigma (make qu))
+  in
   let body, p_opt = match decl with
     | LocalDef (_,ci,_) -> subst_projection fid subst ci, None
     | LocalAssum ({binder_relevance=rci},_) ->
@@ -571,7 +577,7 @@ let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
         let ci = Inductiveops.make_case_info env indsp LetStyle in
         (* Record projections are always NoInvert because they're at
            constant relevance *)
-        mkCase (Inductive.contract_case env (ci, (p, rci), NoInvert, mkRel 1, [|branch|])), None
+        mkCase (Inductive.contract_case env (ci, (p, qu), NoInvert, mkRel 1, [|branch|])), None
   in
   let proj = it_mkLambda_or_LetIn (mkLambda (x,rp,body)) paramdecls in
   let projtyp = it_mkProd_or_LetIn (mkProd (x,rp,ccl)) paramdecls in
@@ -608,8 +614,8 @@ let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
 
 (** [build_proj] will build a projection for each field, or skip if
    the field is anonymous, i.e. [_ : t] *)
-let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs ~uinstance ~kind ~univs
-    (nfi,i,kinds,subst) flags loc decl impls =
+let build_proj mib indsp primitive x rp lifted_fields paramdecls paramargs ~uinstance ~kind ~univs
+    (env,nfi,i,kinds,subst) flags loc decl impls =
   let fi = RelDecl.get_name decl in
   let ti = RelDecl.get_type decl in
   let (sp_proj,i,subst) =
@@ -626,7 +632,8 @@ let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs ~
         warning_or_error ?loc ~info flags indsp why;
         (None,i,NoProjection fi::subst)
   in
-  (nfi - 1, i,
+  let env = Environ.push_rel decl env in
+  (env,nfi - 1, i,
    { Structure.proj_name = fi
    ; proj_true = is_local_assum decl
    ; proj_canonical = flags.Data.pf_canonical
@@ -650,7 +657,8 @@ let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
   let univs = UState.{ universes_entry_universes = univs;
     universes_entry_binders = UnivNames.empty_binders } in
   let fields, _ = mip.mind_nf_lc.(0) in
-  let fields = List.firstn mip.mind_consnrealdecls.(0) fields in
+  let fields, params = List.chop mip.mind_consnrealdecls.(0) fields in
+  let env = Environ.push_rel_context params env in
   let paramdecls = Inductive.inductive_paramdecls (mib, uinstance) in
   let r = mkIndU (indsp,uinstance) in
   let rp = applist (r, Context.Rel.instance_list mkRel 0 paramdecls) in
@@ -667,10 +675,10 @@ let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
     | None -> List.make (List.length fields) None
     | Some fieldlocs -> fieldlocs
   in
-  let (_,_,canonical_projections,_) =
+  let (_,_,_,canonical_projections,_) =
     List.fold_left4
-      (build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs ~uinstance ~kind ~univs)
-      (List.length fields,0,[],[]) flags (List.rev fieldlocs) (List.rev fields) (List.rev fieldimpls)
+      (build_proj mib indsp primitive x rp lifted_fields paramdecls paramargs ~uinstance ~kind ~univs)
+      (env,List.length fields,0,[],[]) flags (List.rev fieldlocs) (List.rev fields) (List.rev fieldimpls)
   in
     List.rev canonical_projections
 

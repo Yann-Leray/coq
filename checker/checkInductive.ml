@@ -31,6 +31,10 @@ let to_entry mind (mb:mutual_inductive_body) : Entries.mutual_inductive_entry =
     | NotRecord -> None | FakeRecord -> Some None
     | PrimRecord data -> Some (Some (Array.map (fun (x,_,_,_) -> x) data))
   in
+  let qus = match mb.mind_record with
+  | NotRecord -> None | FakeRecord -> None
+  | PrimRecord data -> Some (Array.map (fun (_,_,qu,_) -> qu) data)
+  in
   let template = Option.map template_univ_entry mb.mind_template in
   let mind_entry_universes = match mb.mind_universes with
     | Monomorphic ->
@@ -59,7 +63,13 @@ let to_entry mind (mb:mutual_inductive_body) : Entries.mutual_inductive_entry =
       in
       fix_params [] (List.rev mb.mind_params_ctxt) template.template_param_arguments
   in
-  let mind_entry_inds = Array.map_to_list (fun ind ->
+  let qus = match mb.mind_template with
+    | None -> qus
+    | Some template ->
+        let usubst = UVars.make_instance_subst template.template_defaults in
+        Option.map (Array.map (Array.map (UVars.subst_sort_level_qualuniv usubst))) qus
+  in
+  let mind_entry_inds = Array.to_list @@ Array.mapi (fun i ind ->
       let mind_entry_arity =
         match mb.mind_template with
         | None ->
@@ -81,6 +91,7 @@ let to_entry mind (mb:mutual_inductive_body) : Entries.mutual_inductive_entry =
             ignore ctx; (* we will check that the produced user_lc is equal to the input *)
             c
           ) ind.mind_user_lc;
+        mind_entry_proj_qus = match qus with Some qus -> Some (Array.rev_to_list qus.(i)) | None -> None
       })
       mb.mind_packets
   in
@@ -186,7 +197,7 @@ let check_same_record r1 r2 = match r1, r2 with
     (* The kernel doesn't care about the names, we just need to check
        that the saved types are correct. *)
     Array.for_all2 (fun (_,_,r1,tys1) (_,_,r2,tys2) ->
-        Array.equal Sorts.relevance_equal r1 r2 &&
+        Array.equal QualUniv.equal r1 r2 &&
         Array.equal Constr.equal tys1 tys2)
       r1 r2
   | (NotRecord | FakeRecord | PrimRecord _), _ -> false

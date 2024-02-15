@@ -189,6 +189,7 @@ module Constr :
     val universe_name : sort_name_expr Entry.t
     val sort : sort_expr Entry.t
     val sort_quality_or_set : UnivGen.QualityOrSet.t Entry.t
+    val qualuniv_annot : qualuniv_expr option Entry.t
     val pattern : cases_pattern_expr Entry.t
     val constr_pattern : constr_expr Entry.t
     val cpattern : constr_expr Entry.t

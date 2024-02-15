@@ -212,6 +212,20 @@ let fresh_sort_in_quality =
      let u = fresh_level () in
      sort_of_univ (Univ.Universe.make u), ((QVar.Set.empty,Level.Set.singleton u), Constraints.empty)
 
+let fresh_qualuniv_of_sort = function
+| SProp -> QualUniv.sprop, empty_sort_context
+| Prop -> QualUniv.prop, empty_sort_context
+| Set -> QualUniv.set, empty_sort_context
+| Type u ->
+    QualUniv.mkType u, empty_sort_context
+| QSort (q, u) ->
+    QualUniv.mkQSort q u, empty_sort_context
+
+let fresh_qualuniv () =
+  let q = fresh_sort_quality ()
+  and u = fresh_level () in
+  QualUniv.mkQSort q (Universe.make u), ((QVar.Set.singleton q, Level.Set.singleton u), Constraints.empty)
+
 let new_global_univ () =
   let u = fresh_level () in
   (Univ.Universe.make u, ContextSet.singleton u)

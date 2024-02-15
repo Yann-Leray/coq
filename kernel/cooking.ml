@@ -393,5 +393,8 @@ let lift_private_poly_univs info (inst, cstrs) =
   let cstrs = Univ.subst_univs_level_constraints (snd (make_instance_subst info.abstr_info.abstr_ausubst)) cstrs in
   (inst, cstrs)
 
+let lift_qualuniv info qu =
+  UVars.subst_sort_level_qualuniv (make_instance_subst info.abstr_info.abstr_ausubst) qu
+
 let lift_relevance info relevance =
   UVars.subst_sort_level_relevance (make_instance_subst info.abstr_info.abstr_ausubst) relevance

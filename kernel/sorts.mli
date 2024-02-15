@@ -204,6 +204,7 @@ val relevance_equal : relevance -> relevance -> bool
 
 val relevance_subst_fn : (QVar.t -> Quality.t) -> relevance -> relevance
 
+val relevance_of_quality : Quality.t -> relevance
 val relevance_of_sort : t -> relevance
 
 val debug_print : t -> Pp.t

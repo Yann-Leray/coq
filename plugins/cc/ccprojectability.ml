@@ -217,9 +217,13 @@ let make_selector_match_indices env sigma ~pos ~special c (ind_fam, ind_args) re
   in
   let brl =
     List.map build_branch(CList.interval 1 (Array.length mip.mind_consnames)) in
-  let rci = ERelevance.relevant in (* TODO relevance *)
+  let qualuniv, ctx = UnivGen.fresh_qualuniv () in (* TODO qualuniv *)
+  let sigma = Evd.merge_sort_context_set UnivFlexible sigma ctx in
   let ci = make_case_info env ind RegularStyle in
-  make_case_or_project env sigma indt ci (p, rci) c (Array.of_list brl)
+  let c = make_case_or_project env sigma indt ci (p, EQualUniv.make qualuniv) c (Array.of_list brl) in
+  let sigma, _ = Typing.type_of env (Evd.merge_universe_context (Evd.from_env env) (UState.of_context_set env ctx)) c in
+  assert (Evd.is_empty sigma);
+  sigma, c
 
 (*builds a projection in the dependently typed case where a term_composition was found for the fields type*)
 let build_dependent_projection_with_term_composition env sigma cnstr default special argty term_composition ((ind, ind_params) as ind_fam) ind_args =
@@ -229,10 +233,10 @@ let build_dependent_projection_with_term_composition env sigma cnstr default spe
   let return_type = Vars.lift 1 (
     mkProd (Context.make_annot Name.Anonymous ERelevance.relevant, composition_type_template, Vars.lift 1 composition_type_template)
   ) in
-  let e_match = make_selector_match_indices  env sigma ~pos:(snd (fst cnstr)) ~special (mkRel 1) (make_ind_family ind_fam, ind_args) return_type composition_type_template in
+  let sigma, e_match = make_selector_match_indices  env sigma ~pos:(snd (fst cnstr)) ~special (mkRel 1) (make_ind_family ind_fam, ind_args) return_type composition_type_template in
   let match_default = mkApp (e_match, [|default|]) in
   let proj = mkLambda (make_annot_numbered "e" None ERelevance.relevant, argty, match_default) in
-  proj
+  sigma, proj
 
 (*checks the projectability of the given field and builds the according projection. If the field is found to be NotProjectable the simply typed projection generation is tried*)
 let build_projection env sigma
@@ -256,5 +260,4 @@ let build_projection env sigma
     let p = build_simple_projection env sigma argty cnstr special default in
     sigma, p
   | Dependent_Extractable type_composition ->
-    let p = build_dependent_projection_with_term_composition env sigma cnstr default special argty type_composition (ind, ind_params) ind_args in
-    sigma, p
+    build_dependent_projection_with_term_composition env sigma cnstr default special argty type_composition (ind, ind_params) ind_args

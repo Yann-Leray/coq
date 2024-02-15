@@ -79,12 +79,18 @@ val diff_sort_context : sort_context_set -> sort_context_set -> sort_context_set
 
 val fresh_instance : AbstractContext.t -> Instance.t in_sort_context_set
 
+val fresh_qualuniv : unit -> QualUniv.t in_sort_context_set
+
 (** The globref is only used for the error message when there is a mismatch. *)
 val fresh_instance_from : ?loc:Loc.t -> AbstractContext.t -> (GlobRef.t * Instance.t) option ->
   Instance.t in_sort_context_set
 
 val fresh_sort_in_quality : QualityOrSet.t -> Sorts.t in_sort_context_set
 (** NB: QSort is treated as QType *)
+
+val fresh_qualuniv_of_sort : Sorts.t ->
+  QualUniv.t in_sort_context_set
+
 
 val fresh_constant_instance : env -> Constant.t ->
   pconstant in_sort_context_set

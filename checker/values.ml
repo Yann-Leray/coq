@@ -200,6 +200,7 @@ let v_cstrs =
 
 let v_level_instance = v_annot_c ("level_instance", v_pair (v_array v_quality) (v_array v_level))
 let v_univ_instance = v_annot_c ("instance", v_pair (v_array v_quality) (v_array v_univ))
+let v_qualuniv = v_annot_c ("qualuniv", v_pair v_quality v_univ)
 let v_abs_context = v_tuple "abstract_universe_context" [|v_pair (v_array v_name) (v_array v_name); v_cstrs|]
 let v_context_set = v_tuple "universe_context_set" [|v_hset v_level;v_cstrs|]
 
@@ -235,7 +236,7 @@ let v_fix = v_tuple_c ("pfixpoint", [|v_tuple_c ("fix2",[|v_array v_int;v_int|])
 let v_cofix = v_tuple_c ("pcofixpoint",[|v_int;v_prec|]) in
 let v_case_invert = v_sum_c ("case_inversion", 1, [|[|v_array v_constr|]|]) in
 let v_case_branch = v_tuple_c ("case_branch", [|v_array (v_binder_annot v_name); v_constr|]) in
-let v_case_return = v_tuple_c ("case_return", [|v_tuple_c ("case_return'", [|v_array (v_binder_annot v_name); v_constr|]); v_relevance|]) in
+let v_case_return = v_tuple_c ("case_return", [|v_tuple_c ("case_return'", [|v_array (v_binder_annot v_name); v_constr|]); v_qualuniv|]) in
   v_sum_c ("constr",0,[|
     [|v_int|]; (* Rel *)
     [|v_id|]; (* Var *)
@@ -455,7 +456,7 @@ let v_finite = v_enum "recursivity_kind" 3
 
 let v_record_info =
   v_sum "record_info" 2
-    [| [| v_array (v_tuple "record" [| v_id; v_array v_id; v_array v_relevance; v_array v_constr |]) |] |]
+    [| [| v_array (v_tuple "record" [| v_id; v_array v_id; v_array v_qualuniv; v_array v_constr |]) |] |]
 
 let v_ind_pack = v_tuple "mutual_inductive_body"
   [|v_array v_one_ind;
@@ -494,6 +495,7 @@ let v_pqvar = v_opt v_int
 let v_quality_pattern = v_sum "quality_pattern" 0 [|[|v_pqvar|];[|v_constant_quality|]|]
 
 let v_instance_mask = v_pair (v_array v_quality_pattern) (v_array v_puniv)
+let v_qualuniv_mask = v_pair v_quality_pattern v_puniv
 
 let v_sort_pattern = v_sum_c ("sort_pattern", 3,
   [|[|v_puniv|];         (* PSType *)
@@ -518,9 +520,9 @@ let [_v_hpattern;v_elimination;_v_head_elim;_v_patarg] : _ Vector.t =
 
   and v_elimination =
     v_sum_c ("pattern_elimination", 0,
-         [|[|v_array v_patarg|];                                   (* PEApp *)
-           [|v_ind; v_instance_mask; v_patarg; v_array v_patarg|]; (* PECase *)
-           [|v_proj|];                                           (* PEProj *)
+         [|[|v_array v_patarg|];                                                    (* PEApp *)
+           [|v_ind; v_instance_mask; v_patarg; v_qualuniv_mask; v_array v_patarg|]; (* PECase *)
+           [|v_proj|];                                                            (* PEProj *)
          |])
 
   and v_head_elim = v_tuple_c ("head*elims", [|v_hpattern; v_list v_elimination|])

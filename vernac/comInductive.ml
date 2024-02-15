@@ -359,6 +359,18 @@ let inductive_levels env evd ~poly ~indnames ~arities_explicit arities ctors =
   let arities = List.map (fun (arity,_,_,_) -> arity) inds in
   evd, List.split arities
 
+let make_qus env evd ctors =
+  let levels = List.map (List.map (compute_constructor_levels env evd)) ctors in
+  let evd, qus = List.fold_left_map (fun evd ctors ->
+    match ctors with
+    | [] | _ :: _ :: _ -> evd, None
+    | [ctor] ->
+      List.fold_left_map (Evd.fresh_geq_qualuniv_of_sort ~rigid:UState.univ_flexible env) evd ctor
+      |> (fun (evd, qus) -> evd, Some (List.map EQualUniv.make qus))
+    ) evd levels
+  in
+  evd, qus
+
 (** Template poly ***)
 
 let check_named {CAst.loc;v=na} = match na with
@@ -633,6 +645,7 @@ let interp_mutual_inductive_constr ~sigma ~flags ~udecl ~ctx_params ~indnames ~a
         tys)
       constructors
   in
+  let sigma, qus = make_qus env_ar_params sigma ctor_args in
   let sigma, (default_dep_elim, arities) = inductive_levels env_ar_params sigma ~poly ~indnames ~arities_explicit arities ctor_args in
   (* we must minimize before inferring template info.
      For instance before minimization "option" is "option : Type@{u} -> Type@{v}" with "u <= v".
@@ -654,15 +667,17 @@ let interp_mutual_inductive_constr ~sigma ~flags ~udecl ~ctx_params ~indnames ~a
   let arities = List.map EConstr.(to_constr sigma) arities in
   let constructors = List.map (on_snd (List.map (EConstr.to_constr sigma))) constructors in
   let ctx_params = List.map (fun d -> EConstr.to_rel_decl sigma d) ctx_params in
+  let qus = List.map (Option.map (List.map (EQualUniv.kind sigma))) qus in
 
   (* Build the inductive entries *)
-  let entries = List.map3 (fun indname arity (cnames,ctypes) ->
+  let entries = List.map4 (fun indname arity (cnames,ctypes) qu ->
       { mind_entry_typename = indname;
         mind_entry_arity = arity;
         mind_entry_consnames = cnames;
-        mind_entry_lc = ctypes
+        mind_entry_lc = ctypes;
+        mind_entry_proj_qus = qu;
       })
-      indnames arities constructors
+      indnames arities constructors qus
   in
     
   (* Build the mutual inductive entry *)

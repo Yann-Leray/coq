@@ -41,6 +41,9 @@ val clear_constraints : t -> t
 (** Check equality of instances w.r.t. a universe graph *)
 val check_eq_instances : Instance.t check_function
 
+(** Check equality of qualunivs w.r.t. a universe graph *)
+val check_eq_qualuniv : t -> QualUniv.t -> QualUniv.t -> bool
+
 (** {6 ... } *)
 (** Merge of constraints in a universes graph.
   The function [merge_constraints] merges a set of constraints in a given
