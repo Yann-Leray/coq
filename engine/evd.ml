@@ -1228,6 +1228,9 @@ let normalize_universe_instance evd l =
 let normalize_sort evars s =
   UState.nf_sort evars.universes s
 
+let normalize_qualuniv evd u =
+  UState.nf_qualuniv evd.universes u
+
 (* FIXME inefficient *)
 let set_eq_sort env d s1 s2 =
   let s1 = normalize_sort d s1 and s2 = normalize_sort d s2 in
@@ -1276,6 +1279,15 @@ let check_qconstraints evd csts =
 
 let check_quconstraints evd (qcsts,ucsts) =
   check_qconstraints evd qcsts && check_constraints evd ucsts
+
+let fresh_geq_qualuniv_of_sort ?loc ?(rigid=univ_flexible) ?qu env evd s =
+  match qu with
+  | None ->
+    let qu = UVars.QualUniv.of_sort s in
+    evd, qu
+  | Some qu ->
+    let evd = set_leq_sort env evd s (UVars.QualUniv.to_sort qu) in
+    evd, qu
 
 let fix_undefined_variables evd =
   { evd with universes = UState.fix_undefined_variables evd.universes }
@@ -1664,7 +1676,7 @@ sig
   val empty_handle : handle
 (*   val liftn_handle : int -> handle -> handle *)
   val kind : evar_map -> handle -> constr ->
-    handle * (constr, constr, Sorts.t, UVars.Instance.t, Sorts.relevance) kind_of_term
+    handle * (constr, constr, Sorts.t, UVars.Instance.t, Sorts.relevance, UVars.QualUniv.t) kind_of_term
   val expand : evar_map -> handle -> constr -> constr
 end =
 struct
@@ -1828,6 +1840,23 @@ module MiniEConstr = struct
     let empty = UVars.Instance.empty
     let is_empty = UVars.Instance.is_empty
     let unsafe_to_instance t = t
+  end
+
+  module EQualUniv =
+  struct
+    open UVars.QualUniv
+    type t = UVars.QualUniv.t
+    let make u = u
+    let kind = normalize_qualuniv
+    let unsafe_to_qualuniv u = u
+    let unsafe_eq = Refl
+    let quality sigma r = quality (kind sigma r)
+    let family sigma r = family (kind sigma r)
+    let relevance = relevance
+    let univ sigma r = univ (kind sigma r)
+    let to_sort = to_sort
+    let to_instance = to_instance
+    let of_sort = of_sort
   end
 
   type t = econstr

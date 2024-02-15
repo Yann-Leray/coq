@@ -509,30 +509,26 @@ let type_case_scrutinee env (mib, _mip) (u', largs) u pms (pctx, p) c =
   let subst = Vars.subst_of_rel_context_instance_list pctx (realargs @ [c]) in
   Vars.substl subst p
 
-let type_of_case env (mib, mip as specif) ci u pms (pctx, pnas, p, rp, pt) iv c ct lf lft =
+let type_of_case env (mib, mip as specif) ci u pms (pctx, p, rp, pt) iv c ct _lf lft =
   let ((ind, u'), largs) =
     try find_rectype env ct
     with Not_found -> error_case_not_inductive env (make_judge c ct) in
   (* Various well-formedness conditions *)
   let () = if Inductive.is_private specif then error_case_on_private_ind env ind in
-  let sp = match destSort (Reduction.whd_all (push_rel_context pctx env) pt) with
+  let env' = push_rel_context pctx env in
+  let sp = match destSort (Reduction.whd_all env' pt) with
   | sp -> sp
   | exception DestKO ->
     error_elim_arity env (ind, u') c None
   in
-  let () =
-    let expected = Sorts.relevance_of_sort sp in
-    if Sorts.relevance_equal rp expected then ()
-    else
-      error_bad_case_relevance env expected (ci, u, pms, ((pnas, p), rp), iv, c, lf)
-  in
+  check_cast env p (mkSort sp) DEFAULTcast (Constr.mkSort (UVars.QualUniv.to_sort rp));
   let () = check_case_info env (ind, u') ci in
   let () =
     let is_inversion = match iv with
       | NoInvert -> false
       | CaseInvert _ -> true (* contents already checked *)
     in
-    if not (is_inversion = should_invert_case env rp ci)
+    if not (is_inversion = should_invert_case env (UVars.QualUniv.relevance rp) ci)
     then error_bad_invert env
   in
   let () = if not (is_allowed_elimination (specif,u) sp) then begin
@@ -781,7 +777,7 @@ and execute_aux tbl env cstr =
         let lft = Array.mapi build_one_branch lf in
         (* easier than mapping self over various shapes of arrays *)
         let (ci, u, pms, (p,rp), iv, c, lf) = destCase (self cstr) in
-        type_of_case env (mib, mip) ci u pms (pctx, fst p, snd p, rp, pt) iv c ct lf lft
+        type_of_case env (mib, mip) ci u pms (pctx, snd p, rp, pt) iv c ct lf lft
 
     | Fix ((_,i),recdef) ->
       let fix_ty = execute_recdef tbl env recdef i in

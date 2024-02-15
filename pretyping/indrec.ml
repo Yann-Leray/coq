@@ -230,7 +230,7 @@ let mis_make_case_com dep env sigma (ind, u as pind) (mib, mip) s =
         in
         let br = Array.init ncons mk_branch in
         let pnas = Array.of_list (List.rev_map get_annot pctx) in
-        let obj = mkCase (ci, u, pms, ((pnas, liftn ndepar (ndepar + 1) pbody), relevance), iv, mkRel 1, br) in
+        let obj = mkCase (ci, u, pms, ((pnas, liftn ndepar (ndepar + 1) pbody), EQualUniv.of_sort s), iv, mkRel 1, br) in
         obj, pbody
       | Some ps ->
         let term =
@@ -516,7 +516,7 @@ let mis_make_indrec env sigma ?(force_mutual=false) listdepkind mib u =
               let obj =
                 let indty = find_rectype !!env sigma depind in
                 Inductiveops.make_case_or_project !!env !evdref indty ci
-                  (pred, target_relevance)
+                  (pred, EConstr.EQualUniv.of_sort target_sort)
                   (EConstr.mkRel 1) branches
               in
                 it_mkLambda_or_LetIn_name env obj

@@ -124,7 +124,7 @@ module Stack : sig
   val zip : evar_map -> constr * t -> constr
 
   val expand_case : env -> evar_map -> case_stk ->
-    case_info * EInstance.t * constr array * ((rel_context * constr) * ERelevance.t) * (rel_context * constr) array
+    case_info * EInstance.t * constr array * ((rel_context * constr) * EQualUniv.t) * (rel_context * constr) array
 end
 
 (************************************************************************)
@@ -235,7 +235,7 @@ val whd_decompose_lambda_n_assum : env -> evar_map -> int -> constr -> rel_conte
 
 val reducible_mind_case : evar_map -> constr -> bool
 
-val find_conclusion : env -> evar_map -> constr -> (constr, constr, ESorts.t, EInstance.t, ERelevance.t) kind_of_term
+val find_conclusion : env -> evar_map -> constr -> (constr, constr, ESorts.t, EInstance.t, ERelevance.t, EQualUniv.t) kind_of_term
 val is_arity : env -> evar_map -> constr -> bool
 val is_sort : env -> evar_map -> types -> bool
 

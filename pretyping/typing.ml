@@ -234,35 +234,8 @@ let type_case_branches env sigma (ind,largs) specif pj c =
   let lc = Array.map EConstr.of_constr lc in
   let n = (snd specif).Declarations.mind_nrealdecls in
   let ty = whd_betaiota env sigma (lambda_applist_decls sigma (n+1) p (realargs@[c])) in
-  sigma, (lc, ty, ESorts.relevance_of_sort ps)
+  sigma, (lc, ty, ps)
 
-let unify_relevance sigma r1 r2 =
-  match ERelevance.kind sigma r1, ERelevance.kind sigma r2 with
-  | Relevant, Relevant | Irrelevant, Irrelevant -> Some sigma
-  | Relevant, Irrelevant | Irrelevant, Relevant -> None
-  | Irrelevant, RelevanceVar q | RelevanceVar q, Irrelevant ->
-    let sigma =
-      Evd.add_quconstraints sigma
-        (Sorts.QConstraints.singleton (Sorts.Quality.qsprop, Equal, QVar q),
-         Univ.Constraints.empty)
-    in
-    Some sigma
-  | Relevant, RelevanceVar q | RelevanceVar q, Relevant ->
-    let sigma =
-      Evd.add_quconstraints sigma
-        (Sorts.QConstraints.singleton (Sorts.Quality.qprop, Leq, QVar q),
-         Univ.Constraints.empty)
-    in
-    Some sigma
-  | RelevanceVar q1, RelevanceVar q2 ->
-    if Sorts.QVar.equal q1 q2 then Some sigma
-    else
-      let sigma =
-        Evd.add_quconstraints sigma
-          (Sorts.QConstraints.singleton (QVar q1, Equal, QVar q2),
-           Univ.Constraints.empty)
-      in
-      Some sigma
 
 let judge_of_case env sigma case ci (pj,rp) iv cj lfj =
   let ((ind, u), spec) =
@@ -271,19 +244,19 @@ let judge_of_case env sigma case ci (pj,rp) iv cj lfj =
   let specif = lookup_mind_specif env ind in
   let () = if Inductive.is_private specif then Type_errors.error_case_on_private_ind env ind in
   let indspec = ((ind, u), spec) in
-  let sigma, (bty,rslty,rci) = type_case_branches env sigma indspec specif pj cj.uj_val in
+  let sigma, (bty,rslty,ps) = type_case_branches env sigma indspec specif pj cj.uj_val in
   (* should we have evar map aware should_invert_case? *)
-  let sigma, rp =
-    match unify_relevance sigma rp rci with
-    | None ->
-      raise_type_error (env,sigma,Type_errors.BadCaseRelevance (rp, mkCase case))
-    | Some sigma -> sigma, rci
+  let sigma =
+    match Evarconv.unify_leq_delay env sigma (mkSort ps) (mkSort (EQualUniv.to_sort rp)) with
+    | sigma -> sigma
+    | exception Evarconv.UnableToUnify (sigma,e) -> anomaly (str"Wrong case return universe level")
   in
+  let relp = ERelevance.kind sigma @@ EQualUniv.relevance rp in
   let ind = on_snd (EInstance.kind sigma) (fst indspec) in
   let () = check_case_info env ind ci in
   let sigma = check_branch_types env sigma ind cj (lfj,bty) in
   let () = if (match iv with | NoInvert -> false | CaseInvert _ -> true)
-              != Typeops.should_invert_case env (ERelevance.kind sigma rp) ci
+              != Typeops.should_invert_case env relp ci
     then Type_errors.error_bad_invert env
   in
   sigma, { uj_val  = mkCase case;
@@ -306,12 +279,12 @@ let check_allowed_sort env sigma ind c p =
   let specif = lookup_mind_specif env (fst ind) in
   let pj = Retyping.get_judgment_of env sigma p in
   let _, s = whd_decompose_prod env sigma pj.uj_type in
-  let sort =  match EConstr.kind sigma s with
+  let sort = match EConstr.kind sigma s with
     | Sort s -> s
     | _ -> error_elim_arity env sigma ind c None
   in
   match Inductiveops.make_allowed_elimination env sigma (specif, (snd ind)) sort with
-  | Some sigma -> sigma, ESorts.relevance_of_sort sort
+  | Some sigma -> sigma, sort
   | None ->
     error_elim_arity env sigma ind c (Some sort)
 
@@ -470,7 +443,7 @@ let judge_of_array env sigma u tj defj tyj =
 
 type ('constr,'types,'r) bad_relevance =
 | BadRelevanceBinder of 'r * ('constr,'types,'r) Context.Rel.Declaration.pt
-| BadRelevanceCase of 'r * 'constr
+
 
 let bad_relevance_warning =
   CWarnings.create_warning ~name:"bad-relevance" ~default:CWarnings.AsError ()

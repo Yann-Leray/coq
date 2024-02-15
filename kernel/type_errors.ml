@@ -76,7 +76,6 @@ type ('constr, 'types, 'r) ptype_error =
   | UndeclaredUniverses of Level.Set.t
   | DisallowedSProp
   | BadBinderRelevance of 'r * ('constr, 'types, 'r) Context.Rel.Declaration.pt
-  | BadCaseRelevance of 'r * 'constr
   | BadInvert
   | BadVariance of { lev : Level.t; expected : Variance.t; actual : Variance.t }
   | UndeclaredUsedVariables of { declared_vars : Id.Set.t; inferred_vars : Id.Set.t }
@@ -169,9 +168,6 @@ let error_disallowed_sprop env =
 let error_bad_binder_relevance env rlv decl =
   raise (TypeError (env, BadBinderRelevance (rlv, decl)))
 
-let error_bad_case_relevance env rlv case =
-  raise (TypeError (env, BadCaseRelevance (rlv, mkCase case)))
-
 let error_bad_invert env =
   raise (TypeError (env, BadInvert))
 
@@ -228,4 +224,3 @@ let map_ptype_error fr f = function
 | IllTypedRecBody (n, na, jv, t) ->
   IllTypedRecBody (n, Array.map (Context.map_annot_relevance fr) na, Array.map (on_judgment f) jv, Array.map f t)
 | BadBinderRelevance (rlv, decl) -> BadBinderRelevance (fr rlv, Context.Rel.Declaration.map_constr_het fr f decl)
-| BadCaseRelevance (rlv, case) -> BadCaseRelevance (fr rlv, f case)

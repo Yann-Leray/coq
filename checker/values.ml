@@ -111,6 +111,7 @@ let v_variance = v_enum "variance" 3
 
 let v_level_instance = Annot ("level_instance", v_pair (Array v_quality) (Array v_level))
 let v_univ_instance = Annot ("instance", v_pair (Array v_quality) (Array v_univ))
+let v_qualuniv = Annot ("qualuniv", v_pair v_quality v_univ)
 let v_abs_context = v_tuple "abstract_universe_context" [|v_pair (Array v_name) (Array v_name); v_cstrs|]
 let v_context_set = v_tuple "universe_context_set" [|v_hset v_level;v_cstrs|]
 
@@ -169,7 +170,7 @@ and v_case_invert = Sum ("case_inversion", 1, [|[|Array v_constr|]|])
 
 and v_case_branch = Tuple ("case_branch", [|Array (v_binder_annot v_name); v_constr|])
 
-and v_case_return = Tuple ("case_return", [|Tuple ("case_return'", [|Array (v_binder_annot v_name); v_constr|]); v_relevance|])
+and v_case_return = Tuple ("case_return", [|Tuple ("case_return'", [|Array (v_binder_annot v_name); v_constr|]); v_qualuniv|])
 
 let v_rdecl = v_sum "rel_declaration" 0
     [| [|v_binder_annot v_name; v_constr|];               (* LocalAssum *)
@@ -356,7 +357,7 @@ let v_finite = v_enum "recursivity_kind" 3
 
 let v_record_info =
   v_sum "record_info" 2
-    [| [| Array (v_tuple "record" [| v_id; Array v_id; Array v_relevance; Array v_constr |]) |] |]
+    [| [| Array (v_tuple "record" [| v_id; Array v_id; Array v_qualuniv; Array v_constr |]) |] |]
 
 let v_ind_pack = v_tuple "mutual_inductive_body"
   [|Array v_one_ind;
@@ -396,6 +397,7 @@ let v_pqvar = Opt Int
 let v_quality_pattern = v_sum "quality_pattern" 0 [|[|v_pqvar|];[|v_constant_quality|]|]
 
 let v_instance_mask = v_pair (Array v_quality_pattern) (Array v_puniv)
+let v_qualuniv_mask = v_pair v_quality_pattern v_puniv
 
 let v_sort_pattern = Sum ("sort_pattern", 3,
   [|[|v_puniv|];         (* PSType *)
@@ -416,9 +418,9 @@ let rec v_hpattern = Sum ("head_pattern", 0,
   |])
 
 and v_elimination = Sum ("pattern_elimination", 0,
-  [|[|Array v_patarg|];                                   (* PEApp *)
-    [|v_ind; v_instance_mask; v_patarg; Array v_patarg|]; (* PECase *)
-    [|v_proj|];                                           (* PEProj *)
+  [|[|Array v_patarg|];                                                    (* PEApp *)
+    [|v_ind; v_instance_mask; v_patarg; v_qualuniv_mask; Array v_patarg|]; (* PECase *)
+    [|v_proj|];                                                            (* PEProj *)
   |])
 
 and v_head_elim = Tuple ("head*elims", [|v_hpattern; List v_elimination|])

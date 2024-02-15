@@ -210,15 +210,16 @@ val sort_and_universes_of_constr : ?init:Sorts.QVar.Set.t * Univ.Level.Set.t -> 
 
 val universes_of_constr : ?init:Univ.Level.Set.t -> constr -> Univ.Level.Set.t
 
-type ('a,'s,'u,'r) univ_visitor = {
+type ('a, 's, 'u, 'qu, 'r) univ_visitor = {
   visit_sort : 'a -> 's -> 'a;
   visit_instance : 'a -> 'u -> 'a;
+  visit_qualuniv : 'a -> 'qu -> 'a;
   visit_relevance : 'a -> 'r -> 'a;
 }
 
-val visit_kind_univs : ('acc, 'sort, 'instance, 'relevance) univ_visitor ->
+val visit_kind_univs : ('acc, 'sort, 'instance, 'qualuniv, 'relevance) univ_visitor ->
   'acc ->
-  (_, _, 'sort, 'instance, 'relevance) Constr.kind_of_term ->
+  (_, _, 'sort, 'instance, 'relevance, 'qualuniv) Constr.kind_of_term ->
   'acc
 
 (** {3 Low-level cached lift type} *)

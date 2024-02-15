@@ -82,15 +82,15 @@ type 'constr pcase_invert =
   | NoInvert
   | CaseInvert of { indices : 'constr array }
 
-type ('constr,'r) pcase_branch = (Name.t,'r) Context.pbinder_annot array * 'constr
-type ('types,'r) pcase_return = ((Name.t,'r) Context.pbinder_annot array * 'types) * 'r
+type ('constr, 'r) pcase_branch = (Name.t, 'r) Context.pbinder_annot array * 'constr
+type ('types, 'r, 'qualuniv) pcase_return = ((Name.t, 'r) Context.pbinder_annot array * 'types) * 'qualuniv
 
-type ('constr, 'types, 'univs, 'r) pcase =
-  case_info * 'univs * 'constr array * ('types,'r) pcase_return * 'constr pcase_invert * 'constr * ('constr, 'r) pcase_branch array
+type ('constr, 'types, 'univs, 'r, 'qualuniv) pcase =
+  case_info * 'univs * 'constr array * ('types, 'r, 'qualuniv) pcase_return * 'constr pcase_invert * 'constr * ('constr, 'r) pcase_branch array
 
 (* [Var] is used for named variables and [Rel] for variables as
    de Bruijn indices. *)
-type ('constr, 'types, 'sort, 'univs, 'r) kind_of_term =
+type ('constr, 'types, 'sort, 'univs, 'r, 'qualuniv) kind_of_term =
   | Rel       of int
   | Var       of Id.t
   | Meta      of metavariable
@@ -104,7 +104,7 @@ type ('constr, 'types, 'sort, 'univs, 'r) kind_of_term =
   | Const     of (Constant.t * 'univs)
   | Ind       of (inductive * 'univs)
   | Construct of (constructor * 'univs)
-  | Case      of case_info * 'univs * 'constr array * ('types,'r) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
+  | Case      of case_info * 'univs * 'constr array * ('types, 'r, 'qualuniv) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
   | Fix       of ('constr, 'types, 'r) pfixpoint
   | CoFix     of ('constr, 'types, 'r) pcofixpoint
   | Proj      of Projection.t * 'r * 'constr
@@ -114,16 +114,16 @@ type ('constr, 'types, 'sort, 'univs, 'r) kind_of_term =
   | Array     of 'univs * 'constr array * 'constr * 'types
 
 (* constr is the fixpoint of the previous type. *)
-type t = T of (t, t, Sorts.t, Instance.t, Sorts.relevance) kind_of_term [@@unboxed]
+type t = T of (t, t, Sorts.t, Instance.t, Sorts.relevance, UVars.QualUniv.t) kind_of_term [@@unboxed]
 type constr = t
 type types = constr
 
 type existential = existential_key * constr SList.t
 
 type case_invert = constr pcase_invert
-type case_return = (types,Sorts.relevance) pcase_return
+type case_return = (types, Sorts.relevance, UVars.QualUniv.t) pcase_return
 type case_branch = (constr,Sorts.relevance) pcase_branch
-type case = (constr, types, Instance.t, Sorts.relevance) pcase
+type case = (constr, types, Instance.t, Sorts.relevance, UVars.QualUniv.t) pcase
 type rec_declaration = (constr, types, Sorts.relevance) prec_declaration
 type fixpoint = (constr, types, Sorts.relevance) pfixpoint
 type cofixpoint = (constr, types, Sorts.relevance) pcofixpoint
@@ -529,8 +529,8 @@ let iter f c = match kind c with
   | App (c,l) -> f c; Array.iter f l
   | Proj (_p,_r,c) -> f c
   | Evar (_,l) -> SList.Skip.iter f l
-  | Case (_,_,pms,p,iv,c,bl) ->
-    Array.iter f pms; f (snd @@ fst p); iter_invert f iv; f c; Array.iter (fun (_, b) -> f b) bl
+  | Case (_,_,pms,(p,_),iv,c,bl) ->
+    Array.iter f pms; f (snd p); iter_invert f iv; f c; Array.iter (fun (_, b) -> f b) bl
   | Fix (_,(_,tl,bl)) -> Array.iter f tl; Array.iter f bl
   | CoFix (_,(_,tl,bl)) -> Array.iter f tl; Array.iter f bl
   | Array(_u,t,def,ty) -> Array.iter f t; f def; f ty
@@ -903,7 +903,7 @@ let eq_invert eq iv1 iv2 =
 let eq_under_context eq (_nas1, p1) (_nas2, p2) =
   eq p1 p2
 
-let compare_head_gen_leq_with kind1 kind2 leq_universes leq_sorts eq_evars eq leq nargs t1 t2 =
+let compare_head_gen_leq_with kind1 kind2 leq_universe leq_universes leq_sorts eq_evars eq leq nargs t1 t2 =
   match kind_nocast_gen kind1 t1, kind_nocast_gen kind2 t2 with
   | Cast _, _ | _, Cast _ -> assert false (* kind_nocast *)
   | Rel n1, Rel n2 -> Int.equal n1 n2
@@ -929,11 +929,11 @@ let compare_head_gen_leq_with kind1 kind2 leq_universes leq_sorts eq_evars eq le
   | Ind (c1,u1), Ind (c2,u2) -> Ind.CanOrd.equal c1 c2 && leq_universes (Some (GlobRef.IndRef c1, nargs)) u1 u2
   | Construct (c1,u1), Construct (c2,u2) ->
     Construct.CanOrd.equal c1 c2 && leq_universes (Some (GlobRef.ConstructRef c1, nargs)) u1 u2
-  | Case (ci1,u1,pms1,(p1,_r1),iv1,c1,bl1), Case (ci2,u2,pms2,(p2,_r2),iv2,c2,bl2) ->
+  | Case (ci1,u1,pms1,(p1,r1),iv1,c1,bl1), Case (ci2,u2,pms2,(p2,r2),iv2,c2,bl2) ->
     (* Ignore _r1/_r2: implied by comparing p1/p2 *)
     (** FIXME: what are we doing with u1 = u2 ? *)
     Ind.CanOrd.equal ci1.ci_ind ci2.ci_ind && leq_universes (Some (GlobRef.IndRef ci1.ci_ind, 0)) u1 u2 &&
-    Array.equal (eq 0) pms1 pms2 && eq_under_context (eq 0) p1 p2 &&
+    Array.equal (eq 0) pms1 pms2 && eq_under_context (eq 0) p1 p2 && leq_universe r1 r2 &&
     eq_invert (eq 0) iv1 iv2 &&
     eq 0 c1 c2 && Array.equal (eq_under_context (eq 0)) bl1 bl2
   | Fix ((ln1, i1),(_,tl1,bl1)), Fix ((ln2, i2),(_,tl2,bl2)) ->
@@ -955,8 +955,8 @@ let compare_head_gen_leq_with kind1 kind2 leq_universes leq_sorts eq_evars eq le
    application associativity, binders name and Cases annotations are
    not taken into account *)
 
-let compare_head_gen_leq leq_universes leq_sorts eq_evars eq leq t1 t2 =
-  compare_head_gen_leq_with kind kind leq_universes leq_sorts eq_evars eq leq t1 t2
+let compare_head_gen_leq leq_universe leq_universes leq_sort eq_evars eq leq t1 t2 =
+  compare_head_gen_leq_with kind kind leq_universe leq_universes leq_sort eq_evars eq leq t1 t2
 
 (* [compare_head_gen u s f c1 c2] compare [c1] and [c2] using [f] to
    compare the immediate subterms of [c1] of [c2] if needed, [u] to
@@ -967,13 +967,13 @@ let compare_head_gen_leq leq_universes leq_sorts eq_evars eq leq t1 t2 =
    [compare_head_gen_with] is a variant taking kind-of-term functions,
    to expose subterms of [c1] and [c2], as arguments. *)
 
-let compare_head_gen_with kind1 kind2 eq_universes eq_sorts eq_evars eq t1 t2 =
-  compare_head_gen_leq_with kind1 kind2 eq_universes eq_sorts eq_evars eq eq t1 t2
+let compare_head_gen_with kind1 kind2 eq_universe eq_universes eq_sort eq_evars eq t1 t2 =
+  compare_head_gen_leq_with kind1 kind2 eq_universe eq_universes eq_sort eq_evars eq eq t1 t2
 
-let compare_head_gen eq_universes eq_sorts eq_evars eq t1 t2 =
-  compare_head_gen_leq eq_universes eq_sorts eq_evars eq eq t1 t2
+let compare_head_gen eq_universe eq_universes eq_sort eq_evars eq t1 t2 =
+  compare_head_gen_leq eq_universe eq_universes eq_sort eq_evars eq eq t1 t2
 
-let compare_head = compare_head_gen (fun _ -> UVars.Instance.equal) Sorts.equal
+let compare_head = compare_head_gen UVars.QualUniv.equal (fun _ -> UVars.Instance.equal) Sorts.equal
 
 (*******************************)
 (*  alpha conversion functions *)
@@ -985,37 +985,39 @@ let eq_existential eq (evk1, args1) (evk2, args2) =
   Evar.equal evk1 evk2 && SList.equal eq args1 args2
 
 let rec eq_constr nargs m n =
-  (m == n) || compare_head_gen (fun _ -> Instance.equal) Sorts.equal (eq_existential (eq_constr 0)) eq_constr nargs m n
+  (m == n) || compare_head_gen UVars.QualUniv.equal (fun _ -> Instance.equal) Sorts.equal (eq_existential (eq_constr 0)) eq_constr nargs m n
 
 let equal n m = eq_constr 0 m n (* to avoid tracing a recursive fun *)
 
 let eq_constr_univs univs m n =
   if m == n then true
   else
+    let eq_universe = UGraph.check_eq_qualuniv univs in
     let eq_universes _ = UGraph.check_eq_instances univs in
-    let eq_sorts s1 s2 = s1 == s2 || UGraph.check_eq_sort univs s1 s2 in
+    let eq_sort s1 s2 = s1 == s2 || UGraph.check_eq_sort univs s1 s2 in
     let rec eq_constr' nargs m n =
-      m == n ||	compare_head_gen eq_universes eq_sorts (eq_existential (eq_constr' 0)) eq_constr' nargs m n
-    in compare_head_gen eq_universes eq_sorts (eq_existential (eq_constr' 0)) eq_constr' 0 m n
+      m == n ||	compare_head_gen eq_universe eq_universes eq_sort (eq_existential (eq_constr' 0)) eq_constr' nargs m n
+    in compare_head_gen eq_universe eq_universes eq_sort (eq_existential (eq_constr' 0)) eq_constr' 0 m n
 
 let leq_constr_univs univs m n =
   if m == n then true
   else
+    let eq_universe = UGraph.check_eq_qualuniv univs in
     let eq_universes _ = UGraph.check_eq_instances univs in
-    let eq_sorts s1 s2 = s1 == s2 ||
+    let eq_sort s1 s2 = s1 == s2 ||
       UGraph.check_eq_sort univs s1 s2 in
-    let leq_sorts s1 s2 = s1 == s2 ||
+    let leq_sort s1 s2 = s1 == s2 ||
       UGraph.check_leq_sort univs s1 s2 in
     let rec eq_constr' nargs m n =
-      m == n || compare_head_gen eq_universes eq_sorts (eq_existential (eq_constr' 0)) eq_constr' nargs m n
+      m == n || compare_head_gen eq_universe eq_universes eq_sort (eq_existential (eq_constr' 0)) eq_constr' nargs m n
     in
     let rec compare_leq nargs m n =
-      compare_head_gen_leq eq_universes leq_sorts (eq_existential (eq_constr' 0)) eq_constr' leq_constr' nargs m n
+      compare_head_gen_leq eq_universe eq_universes leq_sort (eq_existential (eq_constr' 0)) eq_constr' leq_constr' nargs m n
     and leq_constr' nargs m n = m == n || compare_leq nargs m n in
     compare_leq 0 m n
 
 let rec eq_constr_nounivs m n =
-  (m == n) || compare_head_gen (fun _ _ _ -> true) (fun _ _ -> true) (eq_existential eq_constr_nounivs) (fun _ -> eq_constr_nounivs) 0 m n
+  (m == n) || compare_head_gen (fun _ _ -> true) (fun _ _ _ -> true) (fun _ _ -> true) (eq_existential eq_constr_nounivs) (fun _ -> eq_constr_nounivs) 0 m n
 
 let compare_invert f iv1 iv2 =
   match iv1, iv2 with
@@ -1246,7 +1248,7 @@ let rec hash t =
       combinesmall 11 (combine (Construct.CanOrd.hash c) (Instance.hash u))
     | Case (_ , u, pms, (p,r), iv, c, bl) ->
       combinesmall 12 (combine5 (hash c) (hash_invert iv) (hash_term_array pms) (Instance.hash u)
-                         (combine3 (hash_under_context p) (Sorts.relevance_hash r) (hash_branches bl)))
+                         (combine3 (hash_under_context p) (UVars.QualUniv.hash r) (hash_branches bl)))
     | Fix (_ln ,(_, tl, bl)) ->
       combinesmall 13 (combine (hash_term_array bl) (hash_term_array tl))
     | CoFix(_ln, (_, tl, bl)) ->
@@ -1330,7 +1332,7 @@ let dbg = CDebug.create ~name:"hcons" ()
 
 module GenHCons(C:sig
     type t
-    val kind : t -> (t, t, Sorts.t, Instance.t, Sorts.relevance) kind_of_term
+    val kind : t -> (t, t, Sorts.t, Instance.t, Sorts.relevance, UVars.QualUniv.t) kind_of_term
     val self : t -> constr
     val refcount : t -> int
 
@@ -1399,6 +1401,7 @@ let rec hash_term (t : t) =
     let _,_,cpms,_,civ,_,_ = destCase (self t) in
     let pms,hpms = hash_term_array cpms pms in
     let p, hp = hcons_ctx p in
+    let r, hr = UVars.QualUniv.share r in
     let iv, hiv = sh_invert civ iv in
     let c, hc = sh_rec c in
     let fold accu c =
@@ -1406,7 +1409,7 @@ let rec hash_term (t : t) =
       combine accu h, c
     in
     let hbl, bl = Array.fold_left_map fold 0 bl in
-    let hbl = combine (combine hc (combine hiv (combine hpms (combine hu hp)))) hbl in
+    let hbl = combine (combine hc (combine hiv (combine hpms (combine hu (combine hp hr))))) hbl in
     (Case (hcons_caseinfo ci, u, pms, (p,r), iv, c, bl), combinesmall 12 hbl)
   | Fix (ln,(lna,tl,bl)) ->
     let _, (_,ctl,cbl) = destFix (self t) in
@@ -1585,12 +1588,12 @@ let rec debug_print c =
       str"Constr(" ++ pr_puniverses (MutInd.print sp ++ str"," ++ int i ++ str"," ++ int j) u ++ str")"
   | Proj (p,_r,c) ->
     str"Proj(" ++ Projection.debug_print p ++ str"," ++ debug_print c ++ str")"
-  | Case (_ci,u,pms,(p,_),iv,c,bl) ->
+  | Case (_ci,u,pms,(p,qu),iv,c,bl) ->
     let pr_ctx (nas, c) =
       hov 2 (hov 0 (prvect (fun na -> Name.print na.binder_name ++ spc ()) nas ++ str "|-") ++ spc () ++
         debug_print c)
     in
-    v 0 (hv 0 (str"Case" ++ brk (1,1) ++
+    v 0 (hv 0 (str"Case" ++ str"@{" ++ UVars.QualUniv.pr Sorts.QVar.raw_pr Univ.Universe.raw_pr qu ++ str"}" ++ brk (1,1) ++
              debug_print c ++
              spc () ++ str "params" ++ brk (1,1) ++ prvect (fun x -> spc () ++ debug_print x) pms ++
              spc () ++ str "univs" ++ brk (1,1) ++ UVars.Instance.pr Sorts.QVar.raw_pr Univ.Universe.raw_pr u ++

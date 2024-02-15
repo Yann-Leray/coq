@@ -48,6 +48,7 @@ let val_qvar = Val.create "qvar"
 let val_case = Val.create "case"
 let val_binder = Val.create "binder"
 let val_instance = Val.create "instance"
+let val_qualuniv = Val.create "qualuniv"
 let val_free : Names.Id.Set.t Val.tag = Val.create "free"
 let val_ltac1 : Geninterp.Val.t Val.tag = Val.create "ltac1"
 let val_uint63 = Val.create "uint63"
@@ -332,6 +333,10 @@ let constant = repr_ext val_constant
 let of_instance c = of_ext val_instance c
 let to_instance c = to_ext val_instance c
 let instance = repr_ext val_instance
+
+let of_qualuniv c = of_ext val_qualuniv c
+let to_qualuniv c = to_ext val_qualuniv c
+let qualuniv = repr_ext val_qualuniv
 
 let of_reference = let open Names.GlobRef in function
 | VarRef id -> ValBlk (0, [| of_ident id |])
