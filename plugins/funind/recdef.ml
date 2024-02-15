@@ -327,7 +327,7 @@ type journey_info =
           -> constr infos
           -> unit Proofview.tactic)
       -> ( case_info
-           * (constr * ERelevance.t)
+           * (constr * EQualUniv.t)
            * case_invert
            * constr
            * constr array

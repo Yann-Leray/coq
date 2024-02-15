@@ -26,7 +26,7 @@ type t
 
 val self : t -> constr
 
-val kind : t -> (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance) kind_of_term
+val kind : t -> (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance, UVars.QualUniv.t) kind_of_term
 
 val refcount : t -> int
 (** How many times this term appeared as a subterm of the argument to [of_constr]. *)
@@ -34,7 +34,7 @@ val refcount : t -> int
 val of_constr : Environ.env -> constr -> t
 
 (* May not be used on Rel! (subterms can be rels) *)
-val of_kind_nohashcons : (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance) kind_of_term -> t
+val of_kind_nohashcons : (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance, UVars.QualUniv.t) kind_of_term -> t
 (** Build a [t] without hashconsing. Its refcount may be 1 even if
     an identical term was already seen.
 

@@ -19,7 +19,7 @@ module Self = struct
 
 type t = {
   self : constr;
-  kind : (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance) kind_of_term;
+  kind : (t,t,Sorts.t,UVars.Instance.t,Sorts.relevance, UVars.QualUniv.t) kind_of_term;
   isRel : int (* 0 -> not a rel, otherwise unique identifier of that binder *);
   hash : int;
   mutable refcount : int;

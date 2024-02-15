@@ -132,6 +132,10 @@ val of_instance : EConstr.EInstance.t -> valexpr
 val to_instance : valexpr -> EConstr.EInstance.t
 val instance : EConstr.EInstance.t repr
 
+val of_qualuniv : EConstr.EQualUniv.t -> valexpr
+val to_qualuniv : valexpr -> EConstr.EQualUniv.t
+val qualuniv : EConstr.EQualUniv.t repr
+
 val of_reference : GlobRef.t -> valexpr
 val to_reference : valexpr -> GlobRef.t
 val reference : GlobRef.t repr

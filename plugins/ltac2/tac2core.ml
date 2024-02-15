@@ -571,10 +571,9 @@ let () =
   | Case (ci, u, pms, c, iv, t, bl) ->
     (* FIXME: also change representation Ltac2-side? *)
     let (ci, c, iv, t, bl) = EConstr.expand_case env sigma (ci, u, pms, c, iv, t, bl) in
-    let c = on_snd (EConstr.ERelevance.kind sigma) c in
     v_blk 13 [|
       Tac2ffi.of_ext Tac2ffi.val_case ci;
-      Tac2ffi.(of_pair of_constr of_relevance c);
+      Tac2ffi.(of_pair of_constr of_qualuniv c);
       of_case_invert iv;
       Tac2ffi.of_constr t;
       Tac2ffi.of_array Tac2ffi.of_constr bl;
@@ -669,8 +668,7 @@ let () =
     EConstr.mkConstructU (cstr, u)
   | (13, [|ci; c; iv; t; bl|]) ->
     let ci = Tac2ffi.to_ext Tac2ffi.val_case ci in
-    let c = Tac2ffi.(to_pair to_constr to_relevance c) in
-    let c = on_snd EConstr.ERelevance.make c in
+    let c = Tac2ffi.(to_pair to_constr to_qualuniv c) in
     let iv = to_case_invert iv in
     let t = Tac2ffi.to_constr t in
     let bl = Tac2ffi.to_array Tac2ffi.to_constr bl in
