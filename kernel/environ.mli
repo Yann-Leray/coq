@@ -348,8 +348,11 @@ val push_qualities : Sorts.QVar.Set.t -> env -> env
 
 val push_quality_set : Sorts.QVar.Set.t -> env -> env
 (** [push_quality_set qs env] pushes the set of quality variables in
-    the environment. It does not fail even if a quality variable is
-    already declared. *)
+the environment. It does not fail even if a quality variable is
+  already declared. *)
+
+val push_floating_full_context_set : (Sorts.QVar.Set.t * Univ.Level.Set.t) * Univ.Constraints.t -> env -> env
+(** For the very specific purpose of rewrite rules *)
 
 val push_subgraph : ContextSet.t -> env -> env
 (** [push_subgraph univs env] adds the universes and constraints in
