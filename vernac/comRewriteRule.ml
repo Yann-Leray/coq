@@ -126,7 +126,7 @@ let rewrite_rules_break_SR_msg = CWarnings.create_msg rewrite_rules_break_SR_war
 let warn_rewrite_rules_break_SR ~loc reason =
   CWarnings.warn rewrite_rules_break_SR_msg ?loc reason
 let () = CWarnings.register_printer rewrite_rules_break_SR_msg
-  (fun reason -> Pp.(str "This rewrite rule breaks subject reduction (" ++ reason ++ str ")."))
+  (fun reason -> Pp.(str "This rewrite rule breaks subject reduction " ++ reason))
 
 let interp_rule (udecl, eqs, lhs, rhs: Constrexpr.universe_decl_expr option * _ * _ * _) =
   let env = Global.env () in
@@ -223,8 +223,9 @@ let interp_rule (udecl, eqs, lhs, rhs: Constrexpr.universe_decl_expr option * _ 
   let flags = { Pretyping.no_classes_no_fail_inference_flags with patvars_abstract = true } in
   let evd', rhs =
     try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType typ) rhs
-    with Type_errors.TypeError _ | Pretype_errors.PretypeError _ ->
-      warn_rewrite_rules_break_SR ~loc:rhs_loc (Pp.str "the replacement term doesn't have the type of the pattern");
+    with Pretype_errors.PretypeError (env, evd, e) ->
+      warn_rewrite_rules_break_SR ~loc:rhs_loc
+        Pp.(str "(the replacement term doesn't have the type of the pattern)." ++ fnl () ++ Himsg.explain_pretype_error env evd e);
       Pretyping.understand_tcc ~flags env evd rhs
   in
 
@@ -236,7 +237,9 @@ let interp_rule (udecl, eqs, lhs, rhs: Constrexpr.universe_decl_expr option * _ 
     let b = Constrintern.(intern_gen WithoutTypeConstraint env evd b) in
     let evd, b =
       try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType typ) b
-      with Type_errors.TypeError _ | Pretype_errors.PretypeError _ ->
+      with Pretype_errors.PretypeError (env, evd, e) ->
+        warn_rewrite_rules_break_SR ~loc:rhs_loc
+          Pp.(str "(the equation rhs term doesn't have the type of its lhs)." ++ fnl () ++ Himsg.explain_pretype_error env evd e);
         warn_rewrite_rules_break_SR ~loc:b_loc (Pp.str "the equation rhs term doesn't have the type of its lhs");
         Pretyping.understand_tcc ~flags env evd b
     in
@@ -246,7 +249,7 @@ let interp_rule (udecl, eqs, lhs, rhs: Constrexpr.universe_decl_expr option * _ 
   let evd' = Evd.minimize_universes evd' in
   let _qvars', uvars' = EConstr.universes_of_constr evd' rhs in
   let evd' = Evd.restrict_universe_context evd' (Univ.Level.Set.union uvars uvars') in
-  let fail pp = warn_rewrite_rules_break_SR ~loc:rhs_loc Pp.(str "universe inconsistency, missing constraints: " ++ pp) in
+  let fail pp = warn_rewrite_rules_break_SR ~loc:rhs_loc Pp.(str "(universe inconsistency)." ++ spc () ++ str"Missing constraints: " ++ pp) in
   let () = UState.check_uctx_impl ~fail (Evd.evar_universe_context evd) (Evd.evar_universe_context evd') in
   let evd = evd' in
 
