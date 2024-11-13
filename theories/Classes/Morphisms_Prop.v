@@ -45,7 +45,7 @@ Program Instance not_iff_morphism@{s|u|} :
 
 #[global]
 Program Instance not_iff_morphism'@{| |} :
-  Proper@{Type Prop|Set+1 Set+1} (respectful@{Type Type Prop Prop|Set+1 Set+1 Set Set Set+1 Set+1} iff@{Prop|Set Set} iff@{Prop| Set Set}) not@{Prop|Set}.
+  Proper@{Type Prop|Set+1 Set+1} (respectful@{Type Type Prop Prop|Set+1 Set+1 Set Set} iff@{Prop|Set Set} iff@{Prop| Set Set}) not@{Prop|Set}.
 
 (** Logical conjunction. *)
 
@@ -124,7 +124,7 @@ Qed.
 
 #[global]
 Instance well_founded_morphism@{u} {A : Type@{u}} :
- Proper (respectful@{Type Type Prop Prop|u u Set Set u u} relation_equivalence@{Type Prop|u Set} iff@{Prop|Set Set}) (@well_founded A).
+ Proper (respectful@{Type Type Prop Prop|u u Set Set} relation_equivalence@{Type Prop|u Set} iff@{Prop|Set Set}) (@well_founded A).
 Proof.
  unfold well_founded. intros x y r.
  apply (existR@{Prop|Set Set}); intros H a.

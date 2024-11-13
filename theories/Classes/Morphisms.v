@@ -100,9 +100,9 @@ Proof. split. Qed.
 
 (** The non-dependent version is an instance where we forget dependencies. *)
 (** listings: respectful **)
-Definition respectful@{sa sb sra srb|a b ra rb ab ararb|max(a,b) <= ab, max(a,ra,rb) <= ararb} {A : Type@{sa|a}} {B : Type@{sb|b}}
+Definition respectful@{sa sb sra srb|a b ra rb|} {A : Type@{sa|a}} {B : Type@{sb|b}}
   (R : relation@{sa sra|a ra} A) (R' : relation@{sb srb|b rb} B)
-  : relation@{sb srb|ab ararb} (A -> B) := fun f g => forall x y, R x y -> R' (f x) (g y).
+  : relation (A -> B) := fun f g => forall x y, R x y -> R' (f x) (g y).
 (** listings: end **)
 
 Lemma rewrite_relation_eq_dom@{sa sb sr se|a b r|} {A : Type@{sa|a}} {B : Type@{sb|b}} {R : relation@{sb sr|b r} B} {_ : RewriteRelation R}:
@@ -240,7 +240,7 @@ Section Relations.
 
   Lemma pointwise_pointwise@{s' sb|r b|} {B : Type@{sb|b}} (R : relation@{sb s'|b r} B) :
     relation_equivalence@{sb s'|max(a,b) max(a,r)} (pointwise_relation@{_ _ _|a b r} R)
-    (respectful@{_ _ _ _|a b a r _ _} (@eq@{_ s'|a} A) R).
+    (respectful@{_ _ _ _|a b a r} (@eq@{_ s'|a} A) R).
   Proof.
     intros. split.
     - intros X a b []. apply X.
@@ -249,7 +249,7 @@ Section Relations.
 
   Lemma pointwise_pointwise_prop@{s' sb|r b|} {B : Type@{sb|b}} (R : relation@{sb s'|b r} B) :
     relation_equivalence@{sb s'|max(a,b) max(a,r)} (pointwise_relation@{_ _ _|a b r} R)
-    (respectful@{_ _ _ _|a b Set r _ _} (@eq@{_ Prop|a} A) R).
+    (respectful@{_ _ _ _|a b Set r} (@eq@{_ Prop|a} A) R).
   Proof.
     intros. split.
     - intros X a b []. apply X.
