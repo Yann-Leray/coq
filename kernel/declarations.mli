@@ -294,13 +294,13 @@ type mind_specif = mutual_inductive_body * one_inductive_body
 (** {6 Rewrite rules } *)
 
 type quality_pattern = Sorts.Quality.pattern =
-  | PQVar of int option | PQConstant of Sorts.Quality.constant
+  | PQVar of int option | PQConstant of Sorts.Quality.constant | PQGlobal of Sorts.QGlobal.t
 
 type instance_mask = UVars.Instance.mask
 type qualuniv_mask = UVars.QualUniv.mask
 
 type sort_pattern = Sorts.pattern =
-  | PSProp | PSSProp | PSSet | PSType of int option | PSQSort of int option * int option
+  | PSProp | PSSProp | PSSet | PSType of int option | PSGlobal of Sorts.QGlobal.t * int option | PSQSort of int option * int option
 
 (** Patterns are internally represented as pairs of a head-pattern and a list of eliminations
     Eliminations correspond to elements of the stack in a reduction machine,
