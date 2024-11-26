@@ -792,10 +792,9 @@ and apply_rule whrec env sigma ctx psubst es stk =
       let args, s = extract_n_stack [] np s in
       let psubst = List.fold_left2 (match_arg_pattern whrec env sigma ctx) psubst pargs args in
       apply_rule whrec env sigma ctx psubst e s
-  | Declarations.PECase (pind, pu, pret, pqu, pbrs) :: e, Stack.Case (ci, u, pms, p, iv, brs) :: s ->
+  | Declarations.PECase (pind, pret, pqu, pbrs) :: e, Stack.Case (ci, u, pms, p, iv, brs) :: s ->
       if not @@ Ind.CanOrd.equal pind ci.ci_ind then raise PatternFailure;
       let dummy = mkProp in
-      let psubst = match_einstance sigma pu u psubst in
       let (_, _, _, ((ntys_ret, ret), qu), _, _, brs) = EConstr.annotate_case env sigma (ci, u, pms, p, NoInvert, dummy, brs) in
       let psubst = match_arg_pattern whrec env sigma (ntys_ret @ ctx) psubst pret ret in
       let psubst = match_equaluniv sigma pqu qu psubst in

@@ -1627,14 +1627,12 @@ and match_elim : 'a. ('a, 'a patstate) reduction -> _ -> _ -> pat_state:(fconstr
       let specif = (specif, specif.mind_packets.(snd ci.ci_ind)) in
       let ntys_ret = Environ.expand_arity specif (ci.ci_ind, u) pms (fst p) in
       let ntys_brs = Environ.expand_branch_contexts specif u pms brs in
-      let u = usubst_instance e u in
       let r = usubst_qualuniv e r in
       let prets, pbrss, elims, states = extract_or_kill4 (function [@ocaml.warning "-4"]
-      | PECase (pind, pu, pret, pqu, pbrs) :: es, psubst ->
+      | PECase (pind, pret, pqu, pbrs) :: es, psubst ->
         if not @@ Ind.CanOrd.equal pind ci.ci_ind then None else
           let (let*) = Option.bind in
-          let* subst = UVars.Instance.pattern_match pu u psubst.subst in
-          let* subst = UVars.QualUniv.pattern_match pqu r subst in
+          let* subst = UVars.QualUniv.pattern_match pqu r psubst.subst in
           Some (pret, pbrs, es, { psubst with subst })
       | _ -> None)
           elims states
