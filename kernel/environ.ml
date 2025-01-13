@@ -250,63 +250,6 @@ let ind_relevance kn env = match Indmap_env.find_opt kn env.irr_inds with
 | None -> Sorts.Relevant
 | Some r -> r
 
-(** {6 Changes of representation of Case nodes} *)
-
-(** Provided:
-    - a universe instance [u]
-    - a term substitution [subst]
-    - name replacements [nas]
-    [instantiate_context u subst nas ctx] applies both [u] and [subst] to [ctx]
-    while replacing names using [nas] (order reversed)
-*)
-let instantiate_context u subst nas ctx =
-  let open Context.Rel.Declaration in
-  let get_binder i na =
-    Context.
-    { binder_name = nas.(i).binder_name;
-      binder_relevance = UVars.subst_instance_relevance u na.binder_relevance }
-  in
-  let rec instantiate i ctx = match ctx with
-  | [] -> assert (Int.equal i (-1)); []
-  | LocalAssum (na, ty) :: ctx ->
-    let ctx = instantiate (pred i) ctx in
-    let ty = substnl subst i (subst_instance_constr u ty) in
-    let na = get_binder i na in
-    LocalAssum (na, ty) :: ctx
-  | LocalDef (na, ty, bdy) :: ctx ->
-    let ctx = instantiate (pred i) ctx in
-    let ty = substnl subst i (subst_instance_constr u ty) in
-    let bdy = substnl subst i (subst_instance_constr u bdy) in
-    let na = get_binder i na in
-    LocalDef (na, ty, bdy) :: ctx
-  in
-  instantiate (Array.length nas - 1) ctx
-
-let expand_arity (mib, mip) (ind, u) params nas =
-  let open Context.Rel.Declaration in
-  let paramdecl = Vars.subst_instance_context u mib.mind_params_ctxt in
-  let params = Vars.subst_of_rel_context_instance paramdecl params in
-  let realdecls, _ = List.chop mip.mind_nrealdecls mip.mind_arity_ctxt in
-  let self =
-    let u = UVars.Instance.abstract_instance (UVars.Instance.length u) in
-    let args = Context.Rel.instance mkRel 0 mip.mind_arity_ctxt in
-    mkApp (mkIndU (ind, u), args)
-  in
-  let na = Context.make_annot Anonymous mip.mind_relevance in
-  let realdecls = LocalAssum (na, self) :: realdecls in
-  instantiate_context u params nas realdecls
-
-let expand_branch_contexts (mib, mip) u params br =
-  let paramdecl = Vars.subst_instance_context u mib.mind_params_ctxt in
-  let paramsubst = Vars.subst_of_rel_context_instance paramdecl params in
-  let build_one_branch i (nas, _) (ctx, _) =
-    let ctx, _ = List.chop mip.mind_consnrealdecls.(i) ctx in
-    let ctx = instantiate_context u paramsubst nas ctx in
-    ctx
-  in
-  Array.map2_i build_one_branch br mip.mind_nf_lc
-
-
 let mem_mind kn env = Mindmap_env.mem kn env.env_inductives
 
 let mind_context env mind =
@@ -966,6 +909,94 @@ let lookup_vm_code idx env =
 
 let set_retroknowledge env r = { env with retroknowledge = r }
 let retroknowledge env = env.retroknowledge
+
+module MiniInductive = struct
+  (** {6 Changes of representation of Case nodes} *)
+
+  (** Provided:
+      - a universe instance [u]
+      - a term substitution [subst]
+      - name replacements [nas]
+      [instantiate_context u subst nas ctx] applies both [u] and [subst] to [ctx]
+      while replacing names using [nas] (order reversed)
+  *)
+  let instantiate_context u subst nas ctx =
+    let open Context.Rel.Declaration in
+    let get_binder i na =
+      Context.
+      { binder_name = nas.(i).binder_name;
+        binder_relevance = UVars.subst_instance_relevance u na.binder_relevance }
+    in
+    let rec instantiate i ctx = match ctx with
+    | [] -> assert (Int.equal i (-1)); []
+    | LocalAssum (na, ty) :: ctx ->
+      let ctx = instantiate (pred i) ctx in
+      let ty = substnl subst i (subst_instance_constr u ty) in
+      let na = get_binder i na in
+      LocalAssum (na, ty) :: ctx
+    | LocalDef (na, ty, bdy) :: ctx ->
+      let ctx = instantiate (pred i) ctx in
+      let ty = substnl subst i (subst_instance_constr u ty) in
+      let bdy = substnl subst i (subst_instance_constr u bdy) in
+      let na = get_binder i na in
+      LocalDef (na, ty, bdy) :: ctx
+    in
+    instantiate (Array.length nas - 1) ctx
+
+  let instantiate_context_no_names u subst : rel_context -> rel_context =
+    Context.Rel.map_with_binders_and_relevance
+      (UVars.subst_instance_relevance u)
+      (fun i t -> substnl subst (i-1) (subst_instance_constr u t))
+
+  let get_paramsubst (mib, _) u pms =
+    let pms_ctx = Vars.subst_instance_context u mib.mind_params_ctxt in
+    Vars.subst_of_rel_context_instance pms_ctx pms
+
+
+  let expand_arity (_, mip as specif) (ind, u) pms ?(paramsubst = get_paramsubst specif u pms) nas =
+    let open Context.Rel.Declaration in
+    let indices_ctx, _ = List.chop mip.mind_nrealdecls mip.mind_arity_ctxt in
+    let nas' = Array.sub nas 0 (Array.length nas - 1) in
+    let indices_ctx' = instantiate_context u paramsubst nas' indices_ctx in
+    let na =
+      let r = UVars.subst_instance_relevance u mip.mind_relevance in
+      Context.make_annot nas.(Array.length nas - 1).Context.binder_name r
+    in
+    let self =
+      let args = Context.Rel.instance mkRel 0 indices_ctx in
+      mkApp (mkIndU (ind, u), Array.append (Array.map (lift mip.mind_nrealdecls) pms) args)
+    in
+    LocalAssum (na, self) :: indices_ctx'
+
+  let expand_arity_no_names (_, mip as specif) (ind, u) pms ?(paramsubst = get_paramsubst specif u pms) () =
+    let open Context.Rel.Declaration in
+    let indices_ctx, _ = List.chop mip.mind_nrealdecls mip.mind_arity_ctxt in
+    let indices_ctx' = instantiate_context_no_names u paramsubst indices_ctx in
+    let na =
+      let r = UVars.subst_instance_relevance u mip.mind_relevance in
+      Context.make_annot Anonymous r
+    in
+    let self =
+      let args = Context.Rel.instance mkRel 0 indices_ctx in
+      mkApp (mkIndU (ind, u), Array.append pms args)
+    in
+    LocalAssum (na, self) :: indices_ctx'
+
+  let expand_branch_context (_, mip as specif) i u pms ?(paramsubst = get_paramsubst specif u pms) nas =
+    let ctx, _ = mip.mind_nf_lc.(i - 1) in
+    let ctx, _ = List.chop mip.mind_consnrealdecls.(i - 1) ctx in
+    let ctx = instantiate_context u paramsubst nas ctx in
+    ctx
+
+  let expand_branch_context_no_names (_, mip as specif) i u pms ?(paramsubst = get_paramsubst specif u pms) () =
+    let ctx, _ = mip.mind_nf_lc.(i - 1) in
+    let ctx, _ = List.chop mip.mind_consnrealdecls.(i - 1) ctx in
+    let ctx = instantiate_context_no_names u paramsubst ctx in
+    ctx
+
+  let expand_branch_contexts specif u pms ?(paramsubst = get_paramsubst specif u pms) brs =
+    Array.mapi (fun i (brnas, _) -> expand_branch_context specif (i+1) u pms ~paramsubst brnas) brs
+end
 
 module type QNameS =
 sig

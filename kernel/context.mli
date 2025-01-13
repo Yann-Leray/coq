@@ -171,6 +171,10 @@ sig
       position of the binder in the context starting at 1. *)
   val map_with_binders : (int -> 'c -> 'c) -> ('c, 'c, 'r) pt -> ('c, 'c, 'r) pt
 
+  (** Map all relevances and terms in a given rel-context taking into account
+      the position of the binder in the context starting at 1. *)
+  val map_with_binders_and_relevance : ('r -> 'r) -> (int -> 'c -> 'c) -> ('c, 'c, 'r) pt -> ('c, 'c, 'r) pt
+
   (** Perform a given action on every declaration in a given rel-context. *)
   val iter : ('c -> unit) -> ('c, 'c, 'r) pt -> unit
 

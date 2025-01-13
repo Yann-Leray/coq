@@ -444,6 +444,7 @@ let error_not_allowed_dependent_analysis env isrec i =
 let make_project env sigma ind pred c branches ps =
   assert(Array.length branches == 1);
   let na, ty, t = destLambda sigma pred in
+  assert (not (isLambda sigma t)); (* No indices, only the inductive is abstracted in pred *)
   let mib, mip as specif = Inductive.lookup_mind_specif env ind in
   let () =
     if (* dependent *) not (Vars.noccurn sigma 1 t) &&
@@ -506,6 +507,74 @@ let make_case_or_project env sigma indt ci pred c branches =
      let invert = make_case_invert env sigma indt ~case_relevance:(snd pred) ci in
      mkCase (EConstr.contract_case env sigma (ci, pred, invert, c, branches))
   | Some ps -> make_project env sigma ind (fst pred) c branches ps
+
+
+let new_make_project env sigma indt (pctx, p) c branches ps =
+  let IndType (((ind, u), pms), indices) = indt in
+  let mib, mip as specif = Inductive.lookup_mind_specif env ind in
+  assert (List.is_empty indices);
+
+  assert (Array.length pctx == 1);
+  let na = pctx.(0) in
+
+  let () =
+    if (* dependent *) not (Vars.noccurn sigma 1 p) &&
+         not (has_dependent_elim specif) then
+      user_err
+        Pp.(str"Dependent case analysis not allowed" ++
+              str" on inductive type " ++ Termops.pr_global_env env (IndRef ind) ++ str ".")
+  in
+
+  assert (Array.length branches == 1);
+  let _, br as branch = branches.(0) in
+  let bctx = expand_branch env sigma u (Array.of_list pms) (ind, 1) branch in
+
+  let mkProj i c =
+    let p, r = ps.(i) in
+    let r = subst_instance_relevance u (ERelevance.make r) in
+    mkProj (Projection.make p true, r, c)
+  in
+
+  (* Try to make the match a proj if possible *)
+  let proj = match EConstr.destRel sigma br with
+    | exception Constr.DestKO -> None
+    | i ->
+      match List.skipn (i-1) bctx with
+      | exception Failure _ | [] -> None
+      | LocalDef (_, def, _) :: _ ->
+        Some def
+      | LocalAssum _ :: ctx ->
+        (* This match is just a projection *)
+        Some (mkProj (Context.Rel.nhyps ctx) c)
+  in
+  match proj with
+  | Some proj -> proj
+  | None ->
+  let _, _, ctx =
+    Context.Rel.fold_outside ~init:(0, 1, [])
+      (fun decl (nhyp, len, ctx) ->
+         match decl with
+         | LocalAssum (na, ty) ->
+           let t = mkProj nhyp (mkRel len) in
+           (nhyp + 1, len + 1, LocalDef (na, t, ty) :: ctx)
+         | LocalDef (na, b, ty) ->
+           (nhyp, len + 1, LocalDef (na, b, ty) :: ctx))
+      bctx
+  in
+  let br = it_mkLambda_or_LetIn br ctx in
+  let ty = mkAppliedInd indt in
+  mkLetIn (na, c, ty, Vars.lift 1 br)
+
+
+let new_make_case_or_project env sigma indt ci pred c branches =
+  let IndType (((ind, u), pms), _) = indt in
+  let projs = get_projections env ind in
+  match projs with
+  | None ->
+     let invert = make_case_invert env sigma indt ~case_relevance:(snd pred) ci in
+     mkCase (ci, u, Array.of_list pms, pred, invert, c, branches)
+  | Some ps -> new_make_project env sigma indt (fst pred) c branches ps
+
 
 (* substitution in a signature *)
 

@@ -196,6 +196,8 @@ val hnf_lam_app      : env -> evar_map -> constr -> constr -> constr
 val hnf_lam_appvect  : env -> evar_map -> constr -> constr array -> constr
 val hnf_lam_applist  : env -> evar_map -> constr -> constr list -> constr
 
+val whd_prod_app_gen : env -> evar_map -> (Name.t EConstr.binder_annot -> types -> constr) -> types -> (Name.t EConstr.binder_annot * types * constr) list * types
+
 val whd_decompose_prod : env -> evar_map -> types -> (Name.t EConstr.binder_annot * constr) list * types
 (** Decompose a type into a sequence of products and a non-product conclusion
     in head normal form, using head-reduction to expose the products *)

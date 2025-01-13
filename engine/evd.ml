@@ -1725,8 +1725,10 @@ module MiniEConstr = struct
   let kind_upto = kind
   let of_kind = Constr.of_kind
   let of_constr c = c
+  let of_constr_list l = l
   let of_constr_array v = v
   let unsafe_to_constr c = c
+  let unsafe_to_constr_list l = l
   let unsafe_to_constr_array v = v
   let unsafe_eq = Refl
   let unsafe_relevance_eq = Refl
@@ -1859,7 +1861,9 @@ module MiniEConstr = struct
   let unsafe_to_rel_decl d = d
 
   let of_named_context d = d
+  let unsafe_to_named_context c = c
   let of_rel_context d = d
+  let unsafe_to_rel_context c = c
 
   let unsafe_to_case_invert x = x
   let of_case_invert x = x

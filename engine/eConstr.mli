@@ -465,8 +465,36 @@ val annotate_case : Environ.env -> Evd.evar_map -> case ->
   case_info * EInstance.t * t array * ((rel_context * t) * ERelevance.t) * case_invert * t * (rel_context * t) array
 (** Same as above, but doesn't turn contexts into binders *)
 
+(** Given an inductive type and its parameters, builds the context of the return
+    clause, including the inductive being eliminated. The additional binder
+    array is only used to set the names of the context variables, we use the
+    less general type to make it easy to use this function on Case nodes.
+    The parameter substitution can be passed in or it will be recomputed *)
+val expand_arity : Environ.env -> Evd.evar_map -> inductive puniverses -> constr array ->
+  Name.t binder_annot array -> rel_context
+
+(** Given an inductive type and its parameters, builds the context of the return
+    clause, including the inductive being eliminated. The additional binder
+    array is only used to set the names of the context variables, we use the
+    less general type to make it easy to use this function on Case nodes.
+    The parameter substitution can be passed in or it will be recomputed *)
+val expand_arity_no_names : Environ.env -> Evd.evar_map -> inductive puniverses ->
+  constr array -> rel_context
+
+val expand_branch_context : Environ.env -> Evd.evar_map -> constructor -> EInstance.t -> t array ->
+  Name.t binder_annot array -> rel_context
+(** Given a universe instance and parameters for the inductive type,
+    constructs the typed contexts in which each branch lives. *)
+
+val expand_branch_contexts : Environ.env -> Evd.evar_map -> inductive puniverses -> t array ->
+  case_branch array -> rel_context array
+(** Given a universe instance and parameters for the inductive type,
+    constructs the typed contexts in which each branch lives. *)
+
+
 val expand_branch : Environ.env -> Evd.evar_map ->
   EInstance.t -> t array -> constructor -> case_branch -> rel_context
+(* [@@ocaml.deprecated "Use [expand_branch_context] instead"] *)
 (** Given a universe instance and parameters for the inductive type,
     constructs the typed context in which the branch lives. *)
 

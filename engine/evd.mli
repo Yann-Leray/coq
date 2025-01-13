@@ -715,6 +715,7 @@ module MiniEConstr : sig
   val of_kind : (t, t, ESorts.t, EInstance.t, ERelevance.t) Constr.kind_of_term -> t
 
   val of_constr : Constr.t -> t
+  val of_constr_list : Constr.t list -> t list
   val of_constr_array : Constr.t array -> t array
 
   val to_constr : ?abort_on_undefined_evars:bool -> evar_map -> t -> Constr.t
@@ -722,6 +723,7 @@ module MiniEConstr : sig
   val nf_evar : evar_map -> t -> t
 
   val unsafe_to_constr : t -> Constr.t
+  val unsafe_to_constr_list : t list -> Constr.t list
   val unsafe_to_constr_array : t array -> Constr.t array
 
   val unsafe_eq : (t, Constr.t) eq
@@ -740,8 +742,12 @@ module MiniEConstr : sig
 
   val of_named_context : (Constr.t, Constr.types, Sorts.relevance) Context.Named.pt ->
     (t, t, ERelevance.t) Context.Named.pt
+  val unsafe_to_named_context : (t, t, ERelevance.t) Context.Named.pt ->
+    (Constr.t, Constr.types, Sorts.relevance) Context.Named.pt
   val of_rel_context : (Constr.t, Constr.types, Sorts.relevance) Context.Rel.pt ->
     (t, t, ERelevance.t) Context.Rel.pt
+  val unsafe_to_rel_context : (t, t, ERelevance.t) Context.Rel.pt ->
+    (Constr.t, Constr.types, Sorts.relevance) Context.Rel.pt
 end
 
 (** Only used as EConstr internals *)

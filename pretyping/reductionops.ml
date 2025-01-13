@@ -1446,6 +1446,17 @@ let hnf_lam_appvect env sigma t nl =
 let hnf_lam_applist env sigma t nl =
   List.fold_left (fun acc t -> hnf_lam_app env sigma acc t) t nl
 
+let whd_prod_app_gen env sigma gen =
+  let rec decrec args c =
+    let c = whd_all env sigma c in
+    match EConstr.kind sigma c with
+    | Prod (na, ty, c) ->
+        let arg = gen na ty in
+        decrec ((na, ty, arg) :: args) (subst1 arg c)
+    | _ -> (List.rev args, c)
+  in
+  decrec []
+
 let whd_decompose_prod env sigma =
   let rec decrec env hyps c =
     let t = whd_all env sigma c in

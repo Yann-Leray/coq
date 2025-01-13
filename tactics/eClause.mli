@@ -62,6 +62,11 @@ val make_evar_clause : env -> evar_map -> ?len:int -> EConstr.types ->
     type together with the list of holes generated. Assumes that [t] is
     well-typed in the environment. *)
 
+val progress_evar_clause : env -> evar_map -> clause -> econstr -> evar_map
+
+val find_progress_evar_clause : env -> (evar_map * hole list * 'a) list -> econstr -> evar_map * (hole list * 'a)
+
+
 val solve_evar_clause : env -> evar_map -> bool -> clause -> EConstr.constr bindings ->
   evar_map
 (** [solve_evar_clause env sigma hyps cl bl] tries to solve the holes contained

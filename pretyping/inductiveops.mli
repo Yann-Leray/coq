@@ -216,6 +216,11 @@ val simple_make_case_or_project :
   env -> evar_map -> Constr.case_info ->
   (* pred *) EConstr.constr * ERelevance.t -> EConstr.case_invert -> (* term *) EConstr.constr -> (* branches *) EConstr.constr array -> EConstr.constr
 
+val new_make_case_or_project :
+  env -> evar_map -> inductive_type -> Constr.case_info ->
+  case_return -> constr -> case_branch array -> EConstr.constr
+
+
 val make_case_invert : env -> evar_map -> inductive_type -> case_relevance:ERelevance.t
   -> Constr.case_info -> EConstr.case_invert
 

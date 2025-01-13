@@ -210,6 +210,30 @@ let subst_of_rel_context_instance_list sign l =
 let subst_of_rel_context_instance sign v =
   subst_of_rel_context_instance_list sign (Array.to_list v)
 
+let esubst_of_rel_context_instance_list sign l subst =
+  let open Context.Rel.Declaration in
+  let open Esubst in
+  let subst, rem_args =
+    Context.Rel.fold_outside ~init:(subst, l)
+      (fun decl (subst, l) ->
+        match get_value decl, l with
+        | Some b, l ->
+          let subst = subs_cons (make_substituend (esubst lift_substituend subst b)) subst in
+          subst, l
+        | None, a :: args ->
+          let subst = subs_cons (make_substituend a) subst in
+          subst, args
+        | _ -> CErrors.anomaly (Pp.str "Instance and signature do not match."))
+      sign
+  in
+  if not (List.is_empty rem_args) then
+    CErrors.anomaly (Pp.str "Instance and signature do not match.")
+  else
+  subst
+
+let esubst_of_rel_context_instance sign v =
+  esubst_of_rel_context_instance_list sign (Array.to_list v)
+
 let adjust_rel_to_rel_context sign n =
   let rec aux sign =
     let open RelDecl in

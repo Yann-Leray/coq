@@ -620,6 +620,37 @@ let annotate_case env sigma (ci, u, pms, p, iv, c, bl as case) =
   let bl = Array.map2 mk_br bl ci.ci_cstr_ndecls in
   (ci, u, pms, (p,r), iv, c, bl)
 
+let _instantiate_context u paramsubst nas (ctx : rel_context) : rel_context =
+  let ctx = unsafe_to_rel_context ctx in
+  let paramsubst = unsafe_to_constr_list paramsubst in
+  let u = EInstance.unsafe_to_instance u in
+  match unsafe_relevance_eq with Refl ->
+  let ans = Inductive.instantiate_context u paramsubst nas ctx in
+  of_rel_context ans
+
+
+let expand_arity env _sigma (ind, u) pms (nas : Name.t binder_annot array) : rel_context =
+  let specif = Inductive.lookup_mind_specif env ind in
+  let u = EInstance.unsafe_to_instance u in
+  let pms = unsafe_to_constr_array pms in
+  match unsafe_relevance_eq, unsafe_eq with Refl, Refl ->
+  Inductive.expand_arity specif (ind, u) pms nas
+
+let expand_arity_no_names env _sigma (ind, u) pms =
+  let specif = Inductive.lookup_mind_specif env ind in
+  let u = EInstance.unsafe_to_instance u in
+  let pms = unsafe_to_constr_array pms in
+  match unsafe_relevance_eq, unsafe_eq with Refl, Refl ->
+  Inductive.expand_arity_no_names specif (ind, u) pms ()
+  |> of_rel_context
+
+let expand_branch_context env _sigma (ind, i) u pms (nas : Name.t binder_annot array) : rel_context =
+  let specif = Inductive.lookup_mind_specif env ind in
+  let u = EInstance.unsafe_to_instance u in
+  let pms = unsafe_to_constr_array pms in
+  match unsafe_relevance_eq, unsafe_eq with Refl, Refl ->
+  Inductive.expand_branch_context specif i u pms nas
+
 let expand_branch env _sigma u pms (ind, i) (nas, _br) =
   let open Declarations in
   let u = EInstance.unsafe_to_instance u in
@@ -642,6 +673,21 @@ let expand_branch env _sigma u pms (ind, i) (nas, _br) =
     | Refl, Refl -> ans
   in
   ans
+
+let expand_branch env sigma u pms cstr (nas, _) =
+  let r = expand_branch env sigma u pms cstr (nas, ()) in
+  let r' = expand_branch_context env sigma cstr u pms nas in
+  assert (r = r');
+  r'
+
+
+let expand_branch_contexts env _sigma (ind, u) pms (nas : (Name.t binder_annot array * 'a) array) : rel_context array =
+  let specif = Inductive.lookup_mind_specif env ind in
+  let u = EInstance.unsafe_to_instance u in
+  let pms = unsafe_to_constr_array pms in
+  match unsafe_relevance_eq, unsafe_eq with Refl, Refl ->
+  Inductive.expand_branch_contexts specif u pms nas
+
 
 let contract_case env _sigma (ci, (p,r), iv, c, bl) =
   let p = unsafe_to_constr p in

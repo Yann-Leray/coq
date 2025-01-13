@@ -223,3 +223,8 @@ val visit_kind_univs : ('acc, 'sort, 'instance, 'relevance) univ_visitor ->
 type substituend
 val make_substituend : constr -> substituend
 val lift_substituend : int -> substituend -> constr
+
+val esubst_of_rel_context_instance :
+  Constr.rel_context -> instance -> substituend Esubst.subs -> substituend Esubst.subs
+val esubst_of_rel_context_instance_list :
+  Constr.rel_context -> instance_list -> substituend Esubst.subs -> substituend Esubst.subs

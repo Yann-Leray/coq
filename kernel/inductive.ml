@@ -62,31 +62,15 @@ let inductive_nonrec_rec_paramdecls (mib,u) =
   let paramdecls = inductive_paramdecls (mib,u) in
   Context.Rel.chop_nhyps nnonrecparamdecls paramdecls
 
+let indices (_, mip as specif) i =
+  let _, ty = mip.mind_nf_lc.(i-1) in
+  let _ind, args = decompose_app ty in
+  let _pms, indices = Array.chop (inductive_params specif) args in
+  indices
+
 let instantiate_inductive_constraints mib u =
   UVars.AbstractContext.instantiate u (Declareops.inductive_polymorphic_context mib)
 
-(************************************************************************)
-
-let instantiate_params t u args sign =
-  let fail () =
-    anomaly ~label:"instantiate_params" (Pp.str "type, ctxt and args mismatch.") in
-  let (rem_args, subs, ty) =
-    Context.Rel.fold_outside
-      (fun decl (largs,subs,ty) ->
-        match (decl, largs, kind ty) with
-          | (LocalAssum _, a::args, Prod(_,_,t)) -> (args, a::subs, t)
-          | (LocalDef (_,b,_), _, LetIn(_,_,_,t))    ->
-            (largs, (substl subs (subst_instance_constr u b))::subs, t)
-          | _                       -> fail ())
-      sign
-      ~init:(args,[],t)
-  in
-  let () = if not (List.is_empty rem_args) then fail () in
-  substl subs ty
-
-let full_constructor_instantiate (_,u,(mib,_),params) t =
-  let inst_ind = subst_instance_constr u t in
-   instantiate_params inst_ind u params mib.mind_params_ctxt
 
 (************************************************************************)
 (************************************************************************)
@@ -475,11 +459,18 @@ let is_primitive_record (mib,_) =
     [instantiate_context u subst nas ctx] applies both [u] and [subst] to [ctx]
     while replacing names using [nas] (order reversed)
 *)
-let instantiate_context = Environ.instantiate_context
+open Environ.MiniInductive
+let instantiate_context = instantiate_context
+let instantiate_context_no_names = instantiate_context_no_names
 
-let expand_arity = Environ.expand_arity
+let get_paramsubst = get_paramsubst
 
-let expand_branch_contexts = Environ.expand_branch_contexts
+let expand_arity = expand_arity
+let expand_arity_no_names = expand_arity_no_names
+
+let expand_branch_context = expand_branch_context
+let expand_branch_context_no_names = expand_branch_context_no_names
+let expand_branch_contexts = expand_branch_contexts
 
 type ('constr,'types,'r) pexpanded_case =
   (case_info * ('constr * 'r) * 'constr pcase_invert * 'constr * 'constr array)
@@ -495,7 +486,7 @@ let expand_case_specif mib (ci, u, params, (p,rp), iv, c, br) =
   (* Expand the return clause *)
   let ep =
     let (nas, p) = p in
-    let realdecls = expand_arity (mib, mip) (ci.ci_ind, u) params nas in
+    let realdecls = expand_arity (mib, mip) (ci.ci_ind, u) params ~paramsubst nas in
     Term.it_mkLambda_or_LetIn p realdecls
   in
   (* Expand the branches *)
@@ -543,8 +534,48 @@ let contract_case env (ci, (p,rp), iv, c, br) =
 (************************************************************************)
 (* Type of case branches *)
 
-(* [p] is the predicate, [i] is the constructor number (starting from 0),
+let instantiate_params t u args sign =
+  let fail () =
+    anomaly ~label:"instantiate_params" (Pp.str "type, ctxt and args mismatch.") in
+  let (rem_args, subs, ty) =
+    Context.Rel.fold_outside
+      (fun decl (largs,subs,ty) ->
+        match (decl, largs, kind ty) with
+          | (LocalAssum _, a::args, Prod(_,_,t)) -> (args, a::subs, t)
+          | (LocalDef (_,b,_), _, LetIn(_,_,_,t))    ->
+            (largs, (substl subs (subst_instance_constr u b))::subs, t)
+          | _                       -> fail ())
+      sign
+      ~init:(args,[],t)
+  in
+  let () = if not (List.is_empty rem_args) then fail () in
+  substl subs ty
+
+let full_constructor_instantiate (_,u,(mib,_),params) t =
+  let inst_ind = subst_instance_constr u t in
+  instantiate_params inst_ind u params mib.mind_params_ctxt
+
+
+(* [p] is the predicate, [i] is the constructor number (starting from 1),
    and [cty] is the type of the constructor (params not instantiated) *)
+let build_branch_type (ind, i as cstr) u (_,mip as specif) pms ?(paramsubst = get_paramsubst specif u pms)
+  ?(pctx = expand_arity_no_names specif (ind, u) pms ~paramsubst ()) p =
+  let brctx_length = mip.mind_consnrealdecls.(i-1) in
+  let brctx, _ = List.chop brctx_length (fst mip.mind_nf_lc.(i-1)) in
+
+  let indices = indices specif i in
+  let indices' = Array.map (fun t -> substnl paramsubst brctx_length (subst_instance_constr u t)) indices in
+
+  let cargs = Array.append (Array.map (lift brctx_length) pms) (Context.Rel.instance mkRel 0 brctx) in
+  let self = mkApp (mkConstructU (cstr, u), cargs) in
+  let instance = Array.append indices' [|self|] in
+
+  let s = Esubst.(subs_shft (brctx_length, subs_id 0)) in
+  let instance_subst = Vars.esubst_of_rel_context_instance pctx instance s in
+
+  esubst Vars.lift_substituend instance_subst p
+
+
 let build_branches_type (ind,u) (_,mip as specif) params p =
   let build_one_branch i (ctx, c) =
     let cty = Term.it_mkProd_or_LetIn c ctx in
@@ -560,6 +591,20 @@ let build_branches_type (ind,u) (_,mip as specif) params p =
     let base = Term.lambda_appvect_decls (mip.mind_nrealdecls+1) (lift nargs p) (Array.of_list cargs) in
     Term.it_mkProd_or_LetIn base cstrsign in
   Array.mapi build_one_branch mip.mind_nf_lc
+
+let build_branches_type (ind, u) (_, mip as specif) pms p =
+  let result = build_branches_type (ind, u) specif pms p in
+  let () = ignore result in
+  let _, p = Term.decompose_lambda_decls p in
+  let pms = Array.of_list pms in
+  let r' = Array.mapi (fun i _ ->
+    let p = build_branch_type (ind, i+1) u specif pms p in
+    let brctx = expand_branch_context_no_names specif (i+1) u pms () in
+    Term.it_mkProd_or_LetIn p brctx
+    ) mip.mind_nf_lc
+  in
+  assert (result = r');
+  r'
 
 (************************************************************************)
 (* Checking the case annotation is relevant *)

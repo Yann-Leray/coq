@@ -130,7 +130,12 @@ let evar_of_binder holes = function
 | AnonHyp n ->
   try
     let nondeps = List.filter (fun hole -> not hole.hole_deps) holes in
-    let h = List.nth nondeps (pred n) in
+    let h =
+      if n >= 0 then
+        List.nth nondeps (pred n)
+      else
+        List.nth (List.rev nondeps) (pred (-n))
+    in
     h.hole_evar
   with e when CErrors.noncritical e ->
     user_err Pp.(str "No such binder.")
@@ -181,6 +186,35 @@ let solve_evar_clause env sigma hyp_only clause = function
   in
   let sigma = List.fold_left fold sigma lbind in
   sigma
+
+let progress_evar_clause env sigma clause arg =
+  let holes = List.rev clause.cl_holes in
+  let find_fun hole =
+    match define_with_type sigma env hole.hole_evar arg with
+    | sigma -> Some sigma
+    | exception e when CErrors.noncritical e -> None
+  in
+  match List.find_map find_fun holes with
+  | Some sigma -> sigma
+  | None ->
+      user_err Pp.(str "Could not find adequate binder.") (* TODO: Turn into proper exception *)
+
+let find_progress_evar_clause (type a) env sigmaholes arg =
+  let sigmaholes = Array.map_of_list (fun (sigma, holes, rest) -> sigma, Array.rev_of_list holes, (holes, rest)) sigmaholes in
+  let max_length = Array.fold_left (fun m (_, a, _) -> max m (Array.length a)) 0 sigmaholes in
+  let exception Found of (Evd.evar_map * (hole list * a)) in
+  match for j = 0 to max_length - 1 do
+    Array.iter (fun (sigma, holes, rest) ->
+    match define_with_type sigma env holes.(j).hole_evar arg with
+    | sigma -> raise (Found (sigma, rest))
+    | exception Invalid_argument _ -> () (* index out of bounds *)
+    | exception e when CErrors.noncritical e -> ())
+    sigmaholes
+    done
+  with
+  | exception Found r -> r
+  | () ->
+      user_err Pp.(str "Could not find adequate binder.") (* TODO: Turn into proper exception *)
 
 let check_evar_clause env sigma sigma' eq_clause =
   let f h = if h.hole_deps then Some h.hole_evar_key else None in
