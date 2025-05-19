@@ -51,7 +51,7 @@ type signature_mismatch_error =
   | IncompatiblePolymorphism of env * types * types
   | IncompatibleConstraints of { got : UVars.AbstractContext.t; expect : UVars.AbstractContext.t }
   | IncompatibleVariance
-  | NoRewriteRulesSubtyping
+  | NotConvertibleRewriteRule of env * Rewrite_rules_ops.extra_env * types * types
 
 type subtyping_trace_elt =
   | Submodule of Label.t

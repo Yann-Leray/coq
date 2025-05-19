@@ -107,6 +107,8 @@ type 'a evar_info
 
 type any_evar_info = EvarInfo : 'a evar_info -> any_evar_info
 
+val unsafe_make_evar_info : named_context_val -> etypes -> erelevance -> undefined evar_info
+
 (** {6 Projections from evar infos} *)
 
 val evar_concl : undefined evar_info -> econstr
@@ -203,7 +205,7 @@ val new_pure_evar :
   @param types The type of conclusion of the evar
 *)
 
-val add : evar_map -> Evar.t -> 'a evar_info -> evar_map
+val add : ?name:variable -> evar_map -> Evar.t -> 'a evar_info -> evar_map
 (** [add sigma ev info] adds [ev] with evar info [info] in sigma.
     Precondition: ev must not preexist in [sigma]. *)
 

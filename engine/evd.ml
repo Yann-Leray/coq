@@ -228,6 +228,16 @@ type 'a evar_info = {
 
 type any_evar_info = EvarInfo : 'a evar_info -> any_evar_info
 
+let unsafe_make_evar_info ctx ty r =
+  { evar_concl = Undefined ty;
+    evar_hyps = ctx;
+    evar_body = Evar_empty;
+    evar_filter = Filter.identity;
+    evar_abstract_arguments = Undefined Abstraction.identity;
+    evar_source = Loc.tag @@ Evar_kinds.InternalHole;
+    evar_candidates = Undefined None;
+    evar_relevance = r }
+
 let instance_mismatch () =
   anomaly (Pp.str "Signature and its instance do not match.")
 
@@ -689,7 +699,7 @@ let add_with_name (type a) ?name ~typeclass_candidate ~rrpat d e (i : a evar_inf
 
 (** Evd.add is a low-level function mainly used to update the evar_info
     associated to an evar, so we prevent registering its typeclass status. *)
-let add d e i = add_with_name ~typeclass_candidate:false ~rrpat:false d e i
+let add ?name d e i = add_with_name ?name ~typeclass_candidate:false ~rrpat:false d e i
 
 (*** Evar flags: typeclasses, aliased or obligation flag *)
 

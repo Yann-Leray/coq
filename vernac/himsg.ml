@@ -1225,8 +1225,21 @@ let explain_not_match_error = function
        fnl() ++ str "(incompatible constraints)")
   | IncompatibleVariance ->
     str "incompatible variance information"
-  | NoRewriteRulesSubtyping ->
-    strbrk "subtyping for rewrite rule blocks is not supported"
+  | NotConvertibleRewriteRule (env, evd, t1, t2) ->
+    let evd =
+      Evar.Map.fold (fun ev (ctx, ty, r, name) evd ->
+        let name = match name with Anonymous -> None | Name id -> Some id in
+        let vars = Evarutil.VarSet.variables (Global.env ()) in
+        let hypnaming = Evarutil.RenameExistingBut vars in
+        let (ctx, ty, inst, _) = Evarutil.push_rel_context_to_named_context ~hypnaming env evd (EConstr.of_constr ty) in
+        let evd = Evd.add evd ev ?name (Evd.unsafe_make_evar_info ctx ty (EConstr.ERelevance.make r)) in
+        evd) evd.Rewrite_rules_ops.evar_map (Evd.from_env env)
+    in
+    let t1, t2 = pr_explicit env evd (EConstr.of_constr t1) (EConstr.of_constr t2) in
+    str "rewrite rule not satisfied: " ++
+      t1 ++ spc () ++
+      str "is not convertible to " ++ spc () ++
+      t2
 
 let rec get_submodules acc = function
   | [] -> acc, []
