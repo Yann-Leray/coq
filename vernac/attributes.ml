@@ -296,10 +296,16 @@ let only_locality atts = parse locality atts
 
 let only_polymorphism atts = parse polymorphic atts
 
-let vernac_polymorphic_flag loc =
+let vernac_polymorphic_flag loc : vernac_flag =
   CAst.make ?loc (ukey, VernacFlagList [CAst.make ?loc ("polymorphic", VernacFlagEmpty)])
-let vernac_monomorphic_flag loc =
+let vernac_monomorphic_flag loc : vernac_flag =
   CAst.make ?loc (ukey, VernacFlagList [CAst.make ?loc ("polymorphic", VernacFlagLeaf (FlagQualid (Libnames.qualid_of_string "no")))])
+
+let vernac_export_flag loc : vernac_flag =
+  CAst.make ?loc ("export", VernacFlagEmpty)
+
+let dummy_using_flag : vernac_flag =
+  CAst.make ("using", VernacFlagEmpty)
 
 let reversible = bool_attribute ~name:"reversible"
 
