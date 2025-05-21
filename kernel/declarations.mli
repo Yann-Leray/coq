@@ -346,6 +346,7 @@ type machine_rewrite_rule = {
 (** [(c, { lhs_pat = (u, elims); rhs })] in this list stands for [(PHSymbol (c,u), elims) ==> rhs] *)
 type rewrite_rules_body = {
   rewrules_rules : (Constant.t * machine_rewrite_rule) list;
+  rewrules_global: bool;
 }
 
 (** {6 Module declarations } *)

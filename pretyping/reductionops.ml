@@ -1621,7 +1621,7 @@ let whd_betaiota_deltazeta_for_iota_state ts ?metas env sigma s =
     let rewrite_step =
       match kind sigma t with
       | Const (cst, u) when is_symbol env sigma cst ->
-        let r = Environ.lookup_rewrite_rules cst env in
+        let r = Environ.find_symbol_rewrite_rules cst env in
         let red_fun ctx = whd_state_gen RedFlags.all ?metas (push_rel_context ctx env) sigma in
         begin match apply_rules red_fun env sigma u r stack with
         | r -> Some r

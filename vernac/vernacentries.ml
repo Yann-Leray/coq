@@ -2711,8 +2711,8 @@ let translate_pure_vernac ?loc ~atts v = let open Vernactypes in match v with
 
   | VernacAddRewRule (id, c) ->
     vtdefault (fun () ->
-        unsupported_attributes atts;
-        ComRewriteRule.do_rules id.v c)
+      let global = Attributes.(parse global_att) atts in
+      ComRewriteRule.do_rules id.v ~global c)
 
   (* Gallina extensions *)
 

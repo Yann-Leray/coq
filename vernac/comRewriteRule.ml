@@ -542,8 +542,8 @@ let interp_rule (udecl, lhs, rhs: Constrexpr.universe_decl_expr option * _ * _) 
 
   head_symbol, { nvars = (nvars' - 1, nvarqs', nvarus'); lhs_pat = head_umask, elims; rhs }
 
-let do_rules id rules =
+let do_rules id ?(global = true) rules =
   let env = Global.env () in
   if not @@ Environ.rewrite_rules_allowed env then raise Environ.(RewriteRulesNotAllowed Rule);
-  let body = { rewrules_rules = List.map interp_rule rules } in
+  let body = { rewrules_rules = List.map interp_rule rules; rewrules_global = global } in
   Global.add_rewrite_rules id body

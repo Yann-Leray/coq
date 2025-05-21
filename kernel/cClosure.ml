@@ -435,7 +435,7 @@ end = struct
           in
           Def (constant_value_in u cb.const_body, mask)
         | Symbol b ->
-          let r = match lookup_rewrite_rules cst env with
+          let r = match find_symbol_rewrite_rules cst env with
           | exception Not_found -> assert false
           | r -> r
           in

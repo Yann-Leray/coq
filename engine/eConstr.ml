@@ -1232,7 +1232,7 @@ let constant_value_in env sigma (kn, u) =
   | Undef _ -> raise (NotEvaluableConst NoBody)
   | Primitive p -> raise (NotEvaluableConst (IsPrimitive (u ,p)))
   | Symbol b ->
-    let r = Environ.lookup_rewrite_rules kn env in
+    let r = Environ.find_symbol_rewrite_rules kn env in
     raise (NotEvaluableConst (HasRules (u, b, r)))
 
 (** Kind of type *)

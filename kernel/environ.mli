@@ -184,8 +184,12 @@ val constant_relevance : Constant.t -> env -> Sorts.relevance
 
 val mem_constant : Constant.t -> env -> bool
 
-val add_rewrite_rules : (Constant.t * machine_rewrite_rule) list -> env -> env
-val lookup_rewrite_rules : Constant.t -> env -> machine_rewrite_rule list
+val mem_rewrite_rules : Id.t -> env -> bool
+val lookup_rewrite_rules : Id.t -> env -> rewrite_rules_body
+val add_rewrite_rules : Id.t -> rewrite_rules_body -> env -> env
+
+val find_symbol_rewrite_rules : Constant.t -> env -> machine_rewrite_rule list
+val register_rewrite_rules : rewrite_rules_body -> env -> env
 
 (** New-style polymorphism *)
 val polymorphic_constant  : Constant.t -> env -> bool

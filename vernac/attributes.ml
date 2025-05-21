@@ -186,6 +186,28 @@ let enable_attribute ~key ~default : bool attribute =
     (* We report the location of the 2nd item *)
     error_twice ?loc ~name:key
 
+let error_contradicting ?loc ~name ~name2 : 'a =
+  CErrors.user_err ?loc
+    Pp.(str "Attributes " ++ str name ++ str " and " ++ str name2 ++ str " are contradicting and mutually incompatible.")
+
+let enable_disable_attribute ~key_true ~key_false ~default : bool attribute =
+  fun atts ->
+  let this, extra = List.partition (fun {CAst.v=k, _} -> String.equal key_true k || String.equal key_false k) atts in
+  extra,
+  match this with
+  | [] -> default ()
+  | [ {CAst.v=key, value; loc} ] ->
+    if String.equal key key_true then
+      get_bool_value ?loc ~key ~default:true value
+    else
+      not (get_bool_value ?loc ~key ~default:true value)
+  | { CAst.v=(key, _) ; _} :: { CAst.loc; CAst.v=(key2, _) } :: _ ->
+    (* We report the location of the 2nd item *)
+    if String.equal key key2 then
+      error_twice ?loc ~name:key
+    else
+      error_contradicting ?loc ~name:key ~name2:key2
+
 let qualify_attribute qual (parser:'a attribute) : 'a attribute =
   fun atts ->
     let rec extract extra qualified = function
@@ -342,6 +364,9 @@ let template =
 
 let unfold_fix =
   enable_attribute ~key:"unfold_fix" ~default:(fun () -> false)
+
+let global_att =
+  enable_disable_attribute ~key_true:"global" ~key_false:"local" ~default:(fun () -> true)
 
 let only_locality atts = parse locality atts
 
