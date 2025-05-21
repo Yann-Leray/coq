@@ -417,7 +417,7 @@ assign attributes to a whole document.
 
 .. prodn::
    attributes ::= {* #[ {*, @attribute } ] } {* @legacy_attr }
-   attribute ::= @ident {? @attr_value }
+   attribute ::= @qualid {? @attr_value }
    attr_value ::= = @string
    | = @qualid
    | ( {+, @attribute } )

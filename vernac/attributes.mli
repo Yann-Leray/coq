@@ -172,6 +172,9 @@ val make_attribute : (vernac_flags -> vernac_flags * 'a) -> 'a attribute
 val vernac_polymorphic_flag : Loc.t option -> vernac_flag
 val vernac_monomorphic_flag : Loc.t option -> vernac_flag
 
+val vernac_export_flag : Loc.t option -> vernac_flag
+val dummy_using_flag : vernac_flag
+
 (** For internal use. *)
 val universe_polymorphism_option_name : string list
 val is_universe_polymorphism : unit -> bool

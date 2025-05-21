@@ -118,7 +118,7 @@ GRAMMAR EXTEND Gram
     ]
   ;
   attribute:
-    [ [ k = ident ; v = attr_value -> { CAst.make ~loc (Names.Id.to_string k, v) }
+    [ [ k = qualid ; v = attr_value -> { CAst.make ~loc (Libnames.string_of_qualid k, v) }
       (* Required because "ident" is declared a keyword when loading Ltac. *)
       | IDENT "using" ; v = attr_value -> { CAst.make ~loc ("using", v) } ]
     ]

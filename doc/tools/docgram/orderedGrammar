@@ -257,7 +257,7 @@ attributes: [
 ]
 
 attribute: [
-| ident OPT attr_value
+| qualid OPT attr_value
 ]
 
 attr_value: [

@@ -943,7 +943,7 @@ let vernac_assumption ~atts kind l inline =
   let scope, poly, program_mode, using, user_warns =
     atts.scope, atts.poly, atts.program, atts.using, atts.user_warns in
   if Option.has_some using then
-    Attributes.unsupported_attributes [CAst.make ("using",VernacFlagEmpty)];
+    Attributes.unsupported_attributes [dummy_using_flag];
   ComAssumption.do_assumptions ~poly ~program_mode ~scope ~kind ?user_warns ~inline l
 
 let { Goptions.get = get_uniform_inductive_parameters } =

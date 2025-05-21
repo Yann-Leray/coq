@@ -847,7 +847,7 @@ attribute_list: [
 ]
 
 attribute: [
-| ident attr_value
+| qualid attr_value
 | "using" attr_value
 ]
 
