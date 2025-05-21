@@ -292,6 +292,9 @@ let template =
 let unfold_fix =
   enable_attribute ~key:"unfold_fix" ~default:(fun () -> false)
 
+let always =
+  enable_attribute ~key:"always" ~default:(fun () -> true)
+
 let only_locality atts = parse locality atts
 
 let only_polymorphism atts = parse polymorphic atts

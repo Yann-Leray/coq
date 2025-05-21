@@ -66,6 +66,7 @@ type env = {
   env_inductives : mind_key Mindmap_env.t;
   env_modules : module_body MPmap.t;
   env_modtypes : module_type_body MPmap.t;
+  env_rewrite_rules : rewrite_rules_body Label.Map.t;
   env_named_context : named_context_val; (* section variables *)
   env_rel_context   : rel_context_val;
   env_universes : UGraph.t;
@@ -103,6 +104,7 @@ let empty_env = {
   env_inductives = Mindmap_env.empty;
   env_modules = MPmap.empty;
   env_modtypes = MPmap.empty;
+  env_rewrite_rules = Label.Map.empty;
   constant_hyps = Cmap_env.empty;
   inductive_hyps = Mindmap_env.empty;
   env_named_context = empty_named_context_val;
@@ -223,18 +225,27 @@ let lookup_constant kn env =
 
 let mem_constant kn env = Cmap_env.mem kn env.env_constants
 
-let add_rewrite_rules l env =
-  if not env.rewrite_rules_allowed then raise (RewriteRulesNotAllowed Rule);
+let mem_rewrite_rules lbl env =
+  Label.Map.mem lbl env.env_rewrite_rules
+
+let lookup_rewrite_rules lbl env =
+  Label.Map.find lbl env.env_rewrite_rules
+
+let add_rewrite_rules lbl rules env =
+  { env with env_rewrite_rules = Label.Map.add lbl rules env.env_rewrite_rules }
+
+let find_symbol_rewrite_rules cst env =
+  Cmap_env.find cst env.symb_pats
+
+let register_rewrite_rules rules env =
   let add c r = function
     | None -> anomaly Pp.(str "Trying to add a rule to non-symbol " ++ Constant.print c ++ str".")
     | Some rs -> Some (r::rs)
   in
   { env with
-    symb_pats = List.fold_left (fun symb_pats (c, r) -> Cmap_env.update c (add c r) symb_pats) env.symb_pats l
+    symb_pats = List.fold_left (fun symb_pats (c, r) -> Cmap_env.update c (add c r) symb_pats) env.symb_pats rules.rewrules_rules
   }
 
-let lookup_rewrite_rules cst env =
-  Cmap_env.find cst env.symb_pats
 
 (* Mutual Inductives *)
 let lookup_mind_key kn env =
