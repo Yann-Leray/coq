@@ -176,6 +176,7 @@ let v_cst = v_sum "cst|mind" 0 [|[|v_kn|];[|v_kn;v_kn|]|]
 let v_ind = v_tuple "inductive" [|v_cst;v_int|]
 let v_cons = v_tuple "constructor" [|v_ind;v_int|]
 
+let v_rules = v_tuple "rewrite rule" [|v_dp; v_id|]
 
 (** kernel/univ *)
 let v_level_global = v_tuple "Level.Global.t" [|v_dp;v_string;v_int|]
@@ -357,7 +358,8 @@ let v_typing_flags =
   v_tuple "typing_flags"
     [|v_bool; v_bool; v_bool;
       v_oracle; v_bool; v_bool;
-      v_bool; v_bool; v_bool; v_bool; v_bool|]
+      v_bool; v_bool; v_bool; v_bool; v_bool;
+      v_opt (v_hset v_rules); v_opt (v_hset v_rules)|]
 
 let v_univs = v_sum "universes" 1 [|[|v_abs_context|]|]
 
@@ -543,7 +545,7 @@ let [_v_hpattern;v_elimination;_v_head_elim;_v_patarg] : _ Vector.t =
 let v_rewrule = v_tuple "rewrite_rule"
   [| v_tuple "nvars" [| v_int; v_int; v_int |]; v_pair v_instance_mask (v_list v_elimination); v_constr |]
 let v_rrb = v_tuple "rewrite_rules_body"
-  [| v_list (v_pair v_cst v_rewrule) |]
+  [| v_list (v_pair v_cst v_rewrule); v_bool |]
 
 let v_module_with_decl = v_sum "with_declaration" 0 [|
     [|v_list v_id; v_mp|];

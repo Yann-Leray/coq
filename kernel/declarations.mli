@@ -104,6 +104,9 @@ type typing_flags = {
   enabled_rewrite_rules: RRset.t option;
   (** Enabled rewrite rules ([None] means rewrite rules are not allowed) *)
 
+  enabled_rewrite_rules_type: RRset.t option;
+  (** Enabled rewrite rules for the type
+      ([None] means same as normal, must be [None] except for constants) *)
 }
 
 (** {6 Representation of definitions/assumptions in the kernel } *)

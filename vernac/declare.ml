@@ -1028,8 +1028,8 @@ let declare_possibly_mutual_parameters ~info ~cinfo ?(mono_uctx_extra=UState.emp
       (i+1, (name, Constr.mkConstU (cst,inst))::subst, (cst, univs)::csts)
   ) (0, [], []) cinfo typs)
 
-let make_recursive_bodies ?elim_to env ~typing_flags ~possible_guard ~rec_declaration =
-  let env = Environ.update_typing_flags ?typing_flags env in
+let make_recursive_bodies ?type_mode ?elim_to env ~typing_flags ~possible_guard ~rec_declaration =
+  let env = Environ.update_typing_flags ?type_mode ?typing_flags env in
   let indexes = Pretyping.search_guard ?elim_to env possible_guard rec_declaration in
   let mkbody i = match indexes with
   | Some indexes -> Constr.mkFix ((indexes,i), rec_declaration)
@@ -2095,7 +2095,7 @@ let prepare_proof ?(warn_incomplete=true) { proof; pinfo; sideff } =
       let fixrelevances = List.map (EConstr.ERelevance.kind evd) fixrelevances in
       let rec_declaration = prepare_recursive_declaration pinfo.cinfo fixtypes fixrelevances fixbodies in
       let typing_flags = pinfo.info.typing_flags in
-      fst (make_recursive_bodies ~elim_to:(Inductive.eliminates_to (Evd.elim_graph evd)) env ~typing_flags ~possible_guard ~rec_declaration) in
+      fst (make_recursive_bodies ~elim_to:(Inductive.eliminates_to (Evd.elim_graph evd)) ~type_mode:false env ~typing_flags ~possible_guard ~rec_declaration) in
   let proofs = List.map (fun (body, typ) -> (body, Some typ)) proofs in
   let () = if warn_incomplete then check_incomplete_proof evd in
   { output_entries = proofs; output_ustate = Evd.ustate evd; output_sideff = SideEff.concat eff sideff }

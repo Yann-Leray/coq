@@ -190,6 +190,7 @@ val add_rewrite_rules : RewriteRules.t -> rewrite_rules_body -> env -> env
 
 val enable_rewrite_rules : RewriteRules.t -> env -> env
 val enable_rewrite_rules_flags : RewriteRules.t -> typing_flags -> typing_flags
+val enable_rewrite_rules_proof_flags : RewriteRules.t -> typing_flags -> typing_flags
 val get_enabled_rewrite_rules : env -> RRset.t
 (** [raises RewriteRulesNotAllowed]*)
 
@@ -411,18 +412,25 @@ val push_subgraph : Univ.ContextSet.t -> env -> env
    also checks that they do not imply new transitive constraints
    between pre-existing universes in [env]. *)
 
-val set_typing_flags : typing_flags -> env -> env
+val set_typing_flags : ?type_mode:bool -> typing_flags -> env -> env
 val set_impredicative_set : bool -> env -> env
 val set_type_in_type : bool -> env -> env
 val set_allow_sprop : bool -> env -> env
 val sprop_allowed : env -> bool
 val allow_rewrite_rules : env -> env
 val rewrite_rules_allowed : env -> bool
+val rewrite_rules_type_different : env -> bool
 
 val same_flags : typing_flags -> typing_flags -> bool
 
 (** [update_typing_flags ?typing_flags] may update env with optional typing flags *)
-val update_typing_flags : ?typing_flags:typing_flags -> env -> env
+val update_typing_flags : ?type_mode:bool -> ?typing_flags:typing_flags -> env -> env
+
+(** Sets active rewrite rules to the regular list *)
+val resync_rewrite_rules_body : env -> env
+
+(** Sets active rewrite rules to the type list *)
+val resync_rewrite_rules_type : env -> env
 
 val universes_of_global : env -> GlobRef.t -> AbstractContext.t
 

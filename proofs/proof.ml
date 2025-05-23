@@ -443,7 +443,7 @@ let solve ?with_end_tac env gi info_lvl tac pr =
         Proofview.tclTHEN tac solve_constraints
       else tac
     in
-    let env = Environ.update_typing_flags ?typing_flags:pr.typing_flags env in
+    let env = Environ.update_typing_flags ~type_mode:false ?typing_flags:pr.typing_flags env in
     let (p, (env, status, info), ()) = run_tactic env tac pr in
     let sigma = (data p).sigma in
     let () =

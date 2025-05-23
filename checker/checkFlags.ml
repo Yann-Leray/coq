@@ -10,7 +10,7 @@
 
 open Declarations
 
-let set_local_flags flags env =
+let set_local_flags ?type_mode flags env =
   (* Explicitly ignored flags are set to not change *)
   let envflags = Environ.typing_flags env in
   let flags = {
@@ -22,6 +22,7 @@ let set_local_flags flags env =
     share_reduction = flags.share_reduction;
     allow_uip = flags.allow_uip;
     enabled_rewrite_rules = flags.enabled_rewrite_rules;
+    enabled_rewrite_rules_type = flags.enabled_rewrite_rules_type;
     (* These flags may not *)
     enable_VM = envflags.enable_VM;
     enable_native_compiler = envflags.enable_native_compiler;
@@ -30,4 +31,4 @@ let set_local_flags flags env =
     sprop_allowed = envflags.sprop_allowed;
   }
   in
-  Environ.set_typing_flags flags env
+  Environ.set_typing_flags ?type_mode flags env

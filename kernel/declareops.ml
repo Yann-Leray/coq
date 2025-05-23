@@ -32,6 +32,7 @@ let safe_flags oracle = {
   sprop_allowed = true;
   allow_uip = false;
   enabled_rewrite_rules = None;
+  enabled_rewrite_rules_type = None;
 }
 
 (** {6 Arities } *)

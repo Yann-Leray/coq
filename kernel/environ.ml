@@ -260,10 +260,11 @@ let register_rewrite_rules rules env =
     symb_pats = List.fold_left (fun symb_pats (c, r) -> Cmap_env.update c (add c r) symb_pats) env.symb_pats rules.rewrules_rules
   }
 
-let sync_rewrite_rules prev_rules env =
+let sync_rewrite_rules ~type_mode prev_rules env =
   let rrset = match get_enabled_rewrite_rules env with rrset -> rrset | exception RewriteRulesNotAllowed _ ->
     anomaly Pp.(str"Trying to remove \"-allowed-rewrite-rules\" flag")
   in
+  let rrset = if type_mode then Option.default rrset env.env_typing_flags.enabled_rewrite_rules_type else rrset in
   let prev_rules = Option.default RRset.empty prev_rules in
   (* Efficient symmetric difference function ? *)
   let new_rules, removed_rules = RRset.diff rrset prev_rules, RRset.diff prev_rules rrset in
@@ -279,8 +280,30 @@ let sync_rewrite_rules prev_rules env =
     register_rewrite_rules rr env)
     rules_to_add env
 
+let rewrite_rules_type_different env = Option.has_some env.env_typing_flags.enabled_rewrite_rules_type
+
+let resync_rewrite_rules_type env =
+  if rewrite_rules_type_different env then
+    sync_rewrite_rules ~type_mode:false None env
+  else
+    env
+
+let resync_rewrite_rules_body env =
+  let type_rr = env.env_typing_flags.enabled_rewrite_rules_type in
+  if Option.has_some type_rr then
+    sync_rewrite_rules ~type_mode:false type_rr env
+  else
+    env
+
 let enable_rewrite_rules_flags kn flags =
-  { flags with enabled_rewrite_rules = Some (RRset.add kn (get_enabled_rewrite_rules_flags flags)) }
+  { flags with
+    enabled_rewrite_rules = Some (RRset.add kn (get_enabled_rewrite_rules_flags flags));
+    enabled_rewrite_rules_type = Option.map (RRset.add kn) flags.enabled_rewrite_rules_type; }
+
+let enable_rewrite_rules_proof_flags kn flags =
+  { flags with
+    enabled_rewrite_rules = Some (RRset.add kn (get_enabled_rewrite_rules_flags flags));
+    enabled_rewrite_rules_type = Some (get_enabled_rewrite_rules_flags flags) }
 
 let enable_rewrite_rules kn env =
   let env = { env with env_typing_flags = enable_rewrite_rules_flags kn env.env_typing_flags } in
@@ -582,6 +605,7 @@ let same_flags {
      sprop_allowed;
      allow_uip;
      enabled_rewrite_rules;
+     enabled_rewrite_rules_type;
   } alt =
   check_guarded == alt.check_guarded &&
   check_positive == alt.check_positive &&
@@ -594,23 +618,29 @@ let same_flags {
   impredicative_set == alt.impredicative_set &&
   sprop_allowed == alt.sprop_allowed &&
   allow_uip == alt.allow_uip &&
-  enabled_rewrite_rules == alt.enabled_rewrite_rules
+  enabled_rewrite_rules == alt.enabled_rewrite_rules &&
+  enabled_rewrite_rules_type == alt.enabled_rewrite_rules_type
 [@warning "+9"]
 
 let set_type_in_type b = map_universes (UGraph.set_type_in_type b)
 
-let set_typing_flags c env =
+let set_typing_flags ?type_mode c env =
   if same_flags env.env_typing_flags c then env
   else
+    let () = if Option.is_empty type_mode && Option.has_some c.enabled_rewrite_rules_type then
+      CErrors.user_err Pp.(str"Proof rewrite rules are only supported for opaque definitions")
+    in
+    let type_mode = Option.default false type_mode in
     let newenv = { env with env_typing_flags = c } in
     let newenv = set_type_in_type (not c.check_universes) newenv in
-    if env.env_typing_flags.enabled_rewrite_rules == c.enabled_rewrite_rules then
+    if env.env_typing_flags.enabled_rewrite_rules == c.enabled_rewrite_rules &&
+      env.env_typing_flags.enabled_rewrite_rules_type == c.enabled_rewrite_rules_type then
       newenv
     else
-      sync_rewrite_rules env.env_typing_flags.enabled_rewrite_rules newenv
+      sync_rewrite_rules ~type_mode (if type_mode then env.env_typing_flags.enabled_rewrite_rules_type else env.env_typing_flags.enabled_rewrite_rules) newenv
 
-let update_typing_flags ?typing_flags env =
-  Option.cata (fun flags -> set_typing_flags flags env) env typing_flags
+let update_typing_flags ?type_mode ?typing_flags env =
+  Option.cata (fun flags -> set_typing_flags ?type_mode flags env) env typing_flags
 
 let set_impredicative_set b env =
   set_typing_flags {env.env_typing_flags with impredicative_set=b} env

@@ -458,6 +458,8 @@ let interp_mutual_definition env ~program_mode ~poly ~function_mode rec_order fi
   let fixrecimps = List.map3 (fun ctximps wfimps cclimps -> ctximps @ wfimps @ cclimps) fixctximps fixwfimps fixcclimps in
   let fiximps = List.map2 (fun ctximps cclimps -> ctximps @ cclimps) fixctximps fixcclimps in
 
+  let env = Environ.resync_rewrite_rules_body env in
+
   (* Interp bodies with rollback because temp use of notations/implicit *)
   let fixntns = List.map_append (fun { Vernacexpr.notations } -> List.map Metasyntax.prepare_where_notation notations ) fixl in
   let sigma, fixdefs =
@@ -564,7 +566,7 @@ let finish_regular env sigma use_inference_hook fix =
 let do_mutually_recursive ?pm ~refine ~program_mode ?(use_inference_hook=false) ?scope ?clearbody ~kind ~poly ?typing_flags ?user_warns ?using (rec_order, fixl)
   : Declare.OblState.t option * Declare.Proof.t option =
   let env = Global.env () in
-  let env = Environ.update_typing_flags ?typing_flags env in
+  let env = Environ.update_typing_flags ~type_mode:true ?typing_flags env in
   let (env,rec_sign,sigma),(fix,possible_guard,udecl) = interp_mutual_definition env ~program_mode ~poly ~function_mode:false rec_order fixl in
   check_recursive ~kind env sigma fix;
 

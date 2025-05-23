@@ -295,12 +295,12 @@ type 'a safe_transformer = safe_environment -> 'a * safe_environment
 
 (** {6 Typing flags } *)
 
-let set_typing_flags c senv =
-  let env = Environ.set_typing_flags c senv.env in
+let set_typing_flags ?type_mode c senv =
+  let env = Environ.set_typing_flags ?type_mode c senv.env in
   if env == senv.env then senv
   else { senv with env }
 
-let set_typing_flags flags senv =
+let set_typing_flags ?type_mode flags senv =
   (* NB: we allow changing the conv_oracle inside sections because it
      doesn't matter for consistency. *)
   if Option.has_some senv.sections
@@ -310,7 +310,7 @@ let set_typing_flags flags senv =
              share_reduction = flags.share_reduction;
             })
   then CErrors.user_err Pp.(str "Changing typing flags inside sections is not allowed.");
-  set_typing_flags flags senv
+  set_typing_flags ?type_mode flags senv
 
 let set_impredicative_set b senv =
   let flags = Environ.typing_flags senv.env in
@@ -350,12 +350,12 @@ let set_rewrite_rules_allowed b senv =
   else senv
 
 (* Temporary sets custom typing flags *)
-let with_typing_flags ?typing_flags senv ~f =
+let with_typing_flags ?type_mode ?typing_flags senv ~f =
   match typing_flags with
   | None -> f senv
   | Some typing_flags ->
     let orig_typing_flags = Environ.typing_flags senv.env in
-    let res, senv = f (set_typing_flags typing_flags senv) in
+    let res, senv = f (set_typing_flags ?type_mode typing_flags senv) in
     res, set_typing_flags orig_typing_flags senv
 
 (** {6 Stm machinery } *)
@@ -1118,7 +1118,8 @@ let add_constant l decl senv =
   kn, senv
 
 let add_constant ?typing_flags l decl senv =
-  with_typing_flags ?typing_flags senv ~f:(add_constant l decl)
+  let type_mode = match decl with Entries.OpaqueEntry _ -> Some true | _ -> None in
+  with_typing_flags ?type_mode ?typing_flags senv ~f:(add_constant l decl)
 
 type opaque_certificate = {
   opq_body : Constr.t;
