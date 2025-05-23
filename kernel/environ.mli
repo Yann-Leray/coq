@@ -58,7 +58,7 @@ type env
 (** Type of global environments. *)
 
 type rewrule_not_allowed = Symb | Rule
-exception RewriteRulesNotAllowed of rewrule_not_allowed
+exception RewriteRulesNotAllowed of rewrule_not_allowed option
 
 val oracle : env -> Conv_oracle.oracle
 val set_oracle : env -> Conv_oracle.oracle -> env
@@ -181,12 +181,16 @@ val constant_relevance : Constant.t -> env -> Sorts.relevance
 
 val mem_constant : Constant.t -> env -> bool
 
-val mem_rewrite_rules : Label.t -> env -> bool
-val lookup_rewrite_rules : Label.t -> env -> rewrite_rules_body
-val add_rewrite_rules : Label.t -> rewrite_rules_body -> env -> env
+val mem_rewrite_rules : RewriteRules.t -> env -> bool
+val lookup_rewrite_rules : RewriteRules.t -> env -> rewrite_rules_body
+val add_rewrite_rules : RewriteRules.t -> rewrite_rules_body -> env -> env
+
+val enable_rewrite_rules : RewriteRules.t -> env -> env
+val enable_rewrite_rules_flags : RewriteRules.t -> typing_flags -> typing_flags
+val get_enabled_rewrite_rules : env -> RRset.t
+(** [raises RewriteRulesNotAllowed]*)
 
 val find_symbol_rewrite_rules : Constant.t -> env -> rewrite_rule list
-val register_rewrite_rules : rewrite_rules_body -> env -> env
 
 (** New-style polymorphism *)
 val polymorphic_constant  : Constant.t -> env -> bool

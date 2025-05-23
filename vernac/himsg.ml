@@ -1698,7 +1698,9 @@ let rec vernac_interp_error_handler = function
     if Int.equal i 0 then str "." else str " (level " ++ int i ++ str")."
   | Logic_monad.TacticFailure e ->
     vernac_interp_error_handler e
-  | Environ.RewriteRulesNotAllowed symb_or_rule ->
+  | Environ.RewriteRulesNotAllowed None ->
+    str "Generic error around rewrite rules. Probably an internal bug."
+  | Environ.RewriteRulesNotAllowed Some symb_or_rule ->
     error_not_allowed_rewrite_rules symb_or_rule
   | _ ->
     raise Unhandled

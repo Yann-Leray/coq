@@ -186,6 +186,7 @@ let enable_attribute ~key ~default : bool attribute =
     (* We report the location of the 2nd item *)
     error_twice ?loc ~name:key
 
+
 let qualify_attribute qual (parser:'a attribute) : 'a attribute =
   fun atts ->
     let rec extract extra qualified = function
@@ -434,13 +435,35 @@ let typing_flags_parser : Declarations.typing_flags key_parser = fun ?loc orig a
   in
   match args with
   | VernacFlagList atts ->
-    let typing_flags = Global.typing_flags () in
+    let typing_flags = Option.default (Global.typing_flags ()) orig in
     flag_parser typing_flags atts
   | att ->
     CErrors.user_err ?loc Pp.(str "Ill-formed “typing” attribute: " ++ pr_vernac_flag_value att)
 
-let typing_flags =
-  attribute_of_list ["bypass_check", typing_flags_parser]
+let enabled_rewrite_rules ?loc orig = function
+  | VernacFlagEmpty | VernacFlagLeaf _ ->
+    CErrors.user_err ?loc
+      Pp.(str "Attribute enabled_rewrite_rules only accepts lists of values.")
+  | VernacFlagList atts ->
+    let rec one res = function
+      | [] -> res
+      | {CAst.v=key, value; loc} :: rem ->
+          if List.exists (fun {CAst.v=k, _} -> String.equal key k) rem then
+            error_twice ?loc ~name:key;
+          let qid = Libnames.qualid_of_string ?loc key in
+          let rrl = Nametab.locate_rewrite_rules qid in
+          if not (get_bool_value ?loc ~key ~default:true value) then
+            CErrors.user_err ?loc
+              Pp.(str "Attribute enabled_rewrite_rules can only enable rules.");
+          one (rrl :: res) rem
+    in
+    let rules = one [] atts in
+    let typing_flags = Option.default (Global.typing_flags ()) orig in
+    List.fold_left (fun env kn -> Environ.enable_rewrite_rules_flags kn env) typing_flags rules
+
+
+let typing_flags : Declarations.typing_flags option attribute =
+  attribute_of_list ["bypass_check", typing_flags_parser; "enabled_rewrite_rules", enabled_rewrite_rules]
 
 let bind_scope_where =
   let name = "where to bind scope" in

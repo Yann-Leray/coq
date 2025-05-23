@@ -172,6 +172,8 @@ module Univs : NAMETAB with type elt = Univ.UGlobal.t
 
 module Quality : NAMETAB with type elt = Sorts.QGlobal.t
 
+module RewriteRules : NAMETAB with type elt = RewriteRules.t
+
 (** Module types, modules and open modules/modtypes/sections form three separate name spaces
     (maybe this will change someday) *)
 module ModTypes : NAMETAB with type elt = ModPath.t
@@ -304,6 +306,7 @@ val warn_user_warn_xref : ?loc:Loc.t -> Globnames.extended_global_reference User
    [Not_found] *)
 
 val locate_extended : qualid -> Globnames.extended_global_reference
+val locate_rewrite_rules : qualid -> Names.RewriteRules.t
 val locate_modtype : qualid -> ModPath.t
 val locate_dir : qualid -> GlobDirRef.t
 val locate_module : qualid -> ModPath.t

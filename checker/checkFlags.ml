@@ -21,6 +21,7 @@ let set_local_flags flags env =
     conv_oracle = flags.conv_oracle;
     share_reduction = flags.share_reduction;
     allow_uip = flags.allow_uip;
+    enabled_rewrite_rules = flags.enabled_rewrite_rules;
     (* These flags may not *)
     enable_VM = envflags.enable_VM;
     enable_native_compiler = envflags.enable_native_compiler;

@@ -685,6 +685,15 @@ module QualityV = struct
 end
 module Quality = EasyNoWarn(QualityV)()
 
+module RewriteRulesV = struct
+  include RewriteRules
+  let is_var _ = None
+  module Map = HMap.Make(RewriteRules)
+  let stage = Summary.Stage.Interp
+  let summary_name = "rewriteruletab"
+end
+module RewriteRules = EasyNoWarn(RewriteRulesV)()
+
 module ModTypeV = struct
   include ModPath
   let is_var _ = None
@@ -791,6 +800,7 @@ let locate_abbreviation qid = match locate_extended qid with
   | TrueGlobal _ -> raise Not_found
   | Abbrev kn -> kn
 
+let locate_rewrite_rules qid = RewriteRules.locate qid
 let locate_modtype qid = ModTypes.locate qid
 let full_name_modtype qid = ModTypes.to_path (locate_modtype qid)
 

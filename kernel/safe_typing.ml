@@ -686,7 +686,7 @@ let add_retroknowledge pttc senv =
 type generic_name =
   | C of Constant.t
   | I of MutInd.t
-  | R
+  | R of RewriteRules.t
   | M of ModPath.t
   | MT of ModPath.t
 
@@ -705,10 +705,10 @@ let add_field ((l,sfb) as field) gn senv =
     | SFBmind mib, I mind -> Environ.add_mind mind mib senv.env
     | SFBmodtype mtb, MT mp -> Environ.add_modtype mp mtb senv.env
     | SFBmodule mb, M mp -> Modops.add_module mp mb senv.env
-    | SFBrules r, R ->
-      let env = Environ.add_rewrite_rules l r senv.env in
+    | SFBrules r, R rl ->
+      let env = Environ.add_rewrite_rules rl r senv.env in
       if r.rewrules_always then
-        Environ.register_rewrite_rules r env
+        Environ.enable_rewrite_rules rl env
       else env
     | _ -> assert false
   in
@@ -1164,7 +1164,8 @@ let add_rewrite_rules l rules senv =
   if Option.has_some senv.sections
   then CErrors.user_err Pp.(str "Adding rewrite rules not supported in sections.");
   (* TODO: Hashconsing? *)
-  add_field (l, SFBrules rules) R senv
+  let kn = RewriteRules.make (ModPath.dp senv.modpath) l in
+  add_field (l, SFBrules rules) (R kn) senv
 
 (** Insertion of inductive types *)
 
@@ -1448,7 +1449,7 @@ let add_include me is_module inl senv =
         C (Mod_subst.constant_of_delta_kn resolver (KerName.make mp_sup l))
       | SFBmind _ ->
         I (Mod_subst.mind_of_delta_kn resolver (KerName.make mp_sup l))
-      | SFBrules _ -> R
+      | SFBrules _ -> R (RewriteRules.make (ModPath.dp mp_sup) l)
       | SFBmodule _ -> M (MPdot (mp_sup, l))
       | SFBmodtype _ -> MT (MPdot (mp_sup, l))
     in
