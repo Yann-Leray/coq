@@ -961,6 +961,36 @@ module PRmap = HMap.Make(Projection.Repr.CanOrd)
 module PRset = PRmap.Set
 module PRpred = Predicate.Make(Projection.Repr.CanOrd)
 
+module RewriteRules = struct
+
+  type t = {
+    library : DirPath.t;
+    id : Id.t
+  }
+
+  let make library id = { library ; id }
+
+  let repr x = (x.library, x.id)
+
+  let equal u1 u2 =
+    Id.equal u1.id u2.id &&
+    DirPath.equal u1.library u2.library
+
+  let hash u = Hashset.Combine.combine (Id.hash u.id) (DirPath.hash u.library)
+
+  let compare u1 u2 =
+    let c = Id.compare u1.id u2.id in
+    if c <> 0 then c
+    else
+      DirPath.compare u1.library u2.library
+
+  let to_string { library = d ; id } =
+    DirPath.to_string d ^ "." ^ Id.to_string id
+end
+
+module RRmap = HMap.Make(RewriteRules)
+module RRset = RRmap.Set
+
 module GlobRefInternal = struct
 
   type t =

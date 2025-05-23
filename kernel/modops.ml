@@ -185,9 +185,10 @@ let rec add_structure mp sign resolver linkinfo env =
     | SFBmodule mb -> add_module (MPdot (mp, l)) mb linkinfo env (* adds components as well *)
     | SFBmodtype mtb -> Environ.add_modtype (MPdot (mp, l)) mtb env
     | SFBrules r ->
-      let env = Environ.add_rewrite_rules l r env in
+      let kn = RewriteRules.make (ModPath.dp mp) l in
+      let env = Environ.add_rewrite_rules kn r env in
       if r.rewrules_global then
-        Environ.register_rewrite_rules r env
+        Environ.enable_rewrite_rules kn env
       else env
   in
   List.fold_left add_field env sign

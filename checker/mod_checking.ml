@@ -298,9 +298,10 @@ and check_structure_field env opac mp lab res opacify = function
       add_modtype mp mty env, opac
   | SFBrules rrb ->
       check_rewrite_rules_body env lab rrb;
-      let env = Environ.add_rewrite_rules lab rrb env in
+      let kn = RewriteRules.make (ModPath.dp mp) lab in
+      let env = Environ.add_rewrite_rules kn rrb env in
       if rrb.rewrules_global then
-        Environ.register_rewrite_rules rrb env, opac
+        Environ.enable_rewrite_rules kn env, opac
       else env, opac
 
 and check_signature env opac sign mp_mse res opacify = match sign with

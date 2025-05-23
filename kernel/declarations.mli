@@ -101,6 +101,9 @@ type typing_flags = {
   allow_uip: bool;
   (** Allow definitional UIP (breaks termination) *)
 
+  enabled_rewrite_rules: RRset.t option;
+  (** Enabled rewrite rules ([None] means rewrite rules are not allowed) *)
+
 }
 
 (** {6 Representation of definitions/assumptions in the kernel } *)

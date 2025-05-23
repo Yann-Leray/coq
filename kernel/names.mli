@@ -623,6 +623,21 @@ module PRmap : Map.UExtS with type key = Projection.Repr.t and module Set := PRs
 (** Predicate on projection representation (ignoring unfolding state) *)
 module PRpred : Predicate.S with type elt = Projection.Repr.t
 
+module RewriteRules : sig
+  type t
+
+  val make : DirPath.t -> Id.t -> t
+  val repr : t -> DirPath.t * Id.t
+
+  val equal : t -> t -> bool
+  val hash : t -> int
+  val compare : t -> t -> int
+  val to_string : t -> string
+end
+
+module RRset : CSig.USetS with type elt = RewriteRules.t
+module RRmap : Map.UExtS with type key = RewriteRules.t and module Set := RRset
+
 (** {6 Global reference is a kernel side type for all references together } *)
 
 module GlobRef : sig
