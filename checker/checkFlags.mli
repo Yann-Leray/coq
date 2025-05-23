@@ -8,5 +8,5 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-val set_local_flags : Declarations.typing_flags -> Environ.env -> Environ.env
+val set_local_flags : ?type_mode:bool -> Declarations.typing_flags -> Environ.env -> Environ.env
 (** Set flags except for those ignored by the checker (see .ml file for those). *)

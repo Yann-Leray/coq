@@ -440,10 +440,10 @@ let typing_flags_parser : Declarations.typing_flags key_parser = fun ?loc orig a
   | att ->
     CErrors.user_err ?loc Pp.(str "Ill-formed “typing” attribute: " ++ pr_vernac_flag_value att)
 
-let enabled_rewrite_rules ?loc orig = function
+let enabled_rewrite_rules ~body ?loc orig = function
   | VernacFlagEmpty | VernacFlagLeaf _ ->
     CErrors.user_err ?loc
-      Pp.(str "Attribute enabled_rewrite_rules only accepts lists of values.")
+      Pp.(str "Attribute enabled_rewrite_rules" ++ (if body then str"_body" else mt()) ++ str" only accepts lists of values.")
   | VernacFlagList atts ->
     let rec one res = function
       | [] -> res
@@ -451,19 +451,27 @@ let enabled_rewrite_rules ?loc orig = function
           if List.exists (fun {CAst.v=k, _} -> String.equal key k) rem then
             error_twice ?loc ~name:key;
           let qid = Libnames.qualid_of_string ?loc key in
-          let rrl = Nametab.locate_rewrite_rules qid in
+          let rrl =
+            match Nametab.locate_rewrite_rules qid with
+            | rrl -> rrl
+            | exception Not_found ->
+                CErrors.user_err ?loc Pp.(str "Unknown rewrite rule set")
+            in
           if not (get_bool_value ?loc ~key ~default:true value) then
             CErrors.user_err ?loc
-              Pp.(str "Attribute enabled_rewrite_rules can only enable rules.");
+              Pp.(str "Attribute enabled_rewrite_rules" ++ (if body then str"_body" else mt()) ++ str"can only enable rules.");
           one (rrl :: res) rem
     in
     let rules = one [] atts in
     let typing_flags = Option.default (Global.typing_flags ()) orig in
-    List.fold_left (fun env kn -> Environ.enable_rewrite_rules_flags kn env) typing_flags rules
+    List.fold_left (fun env kn -> (if body then Environ.enable_rewrite_rules_body_flags else Environ.enable_rewrite_rules_flags) kn env) typing_flags rules
 
 
 let typing_flags : Declarations.typing_flags option attribute =
-  attribute_of_list ["bypass_check", typing_flags_parser; "enabled_rewrite_rules", enabled_rewrite_rules]
+  attribute_of_list
+    ["bypass_check", typing_flags_parser;
+     "enabled_rewrite_rules", enabled_rewrite_rules ~body:false;
+     "enabled_rewrite_rules_body", enabled_rewrite_rules ~body:true]
 
 let bind_scope_where =
   let name = "where to bind scope" in
