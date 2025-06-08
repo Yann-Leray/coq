@@ -59,7 +59,7 @@ let do_symbol ~cumulative ~poly ~unfold_fix udecl (id, typ) =
 
 let do_symbols ~cumulative ~poly ~unfold_fix l =
   let env = Global.env () in
-  if not @@ Environ.rewrite_rules_allowed env then raise Environ.(RewriteRulesNotAllowed Symb);
+  if not @@ Environ.rewrite_rules_allowed env then raise Environ.(RewriteRulesNotAllowed (Some Symb));
   let udecl, l = preprocess_symbols l in
   List.iter (do_symbol ~cumulative ~poly ~unfold_fix udecl) l
 
@@ -543,8 +543,9 @@ let interp_rule (udecl, eqs, lhs, rhs: Constrexpr.universe_decl_expr option * _ 
 
   head_symbol, { nvars = (nvars' - 1, nvarqs', nvarus'); lhs_pat = head_umask, elims; equalities; rhs }
 
-let do_rules id rules =
+let do_rules id ?(always = true) rules =
   let env = Global.env () in
-  if not @@ Environ.rewrite_rules_allowed env then raise Environ.(RewriteRulesNotAllowed Rule);
-  let body = { rewrules_rules = List.map interp_rule rules } in
+  if not @@ Environ.rewrite_rules_allowed env then raise Environ.(RewriteRulesNotAllowed (Some Rule));
+  let body = { rewrules_rules = List.map interp_rule rules; rewrules_always = always } in
+  let () = DeclareRewriteRules.inRewriteRules id in
   Global.add_rewrite_rules id body

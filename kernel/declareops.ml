@@ -31,6 +31,8 @@ let safe_flags oracle = {
   impredicative_set = false;
   sprop_allowed = true;
   allow_uip = false;
+  enabled_rewrite_rules = None;
+  enabled_rewrite_rules_type = None;
 }
 
 (** {6 Arities } *)
@@ -327,11 +329,11 @@ let hcons_mind mib =
     mind_template = Option.Smart.map hcons_template_universe mib.mind_template;
     mind_universes = hcons_universes mib.mind_universes }
 
-let subst_rewrite_rules subst ({ rewrules_rules } as rules) =
+let subst_rewrite_rules subst ({ rewrules_rules; _ } as rules) =
   let body' = List.Smart.map (fun (name, ({ rhs; _ } as rule) as orig) ->
       let rhs' = subst_mps subst rhs in
       if rhs == rhs' then orig else name, { rule with rhs = rhs' })
       rewrules_rules
   in
   if rewrules_rules == body' then rules else
-    { rewrules_rules = body' }
+    { rules with rewrules_rules = body' }

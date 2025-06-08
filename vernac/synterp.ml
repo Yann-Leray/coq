@@ -441,7 +441,7 @@ let rec synterp ~intern ?loc ~atts v =
     | VernacSetOption (export,key,value) ->
       let atts = if export then begin
           warn_legacy_export_set ?loc ();
-          CAst.make ?loc ("export", VernacFlagEmpty) :: atts
+          vernac_export_flag loc :: atts
         end
         else atts
       in

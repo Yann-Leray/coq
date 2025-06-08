@@ -101,6 +101,12 @@ type typing_flags = {
   allow_uip: bool;
   (** Allow definitional UIP (breaks termination) *)
 
+  enabled_rewrite_rules: RRset.t option;
+  (** Enabled rewrite rules ([None] means rewrite rules are not allowed) *)
+
+  enabled_rewrite_rules_type: RRset.t option;
+  (** Enabled rewrite rules for the type
+      ([None] means same as normal, must be [None] except for constants) *)
 }
 
 (** {6 Representation of definitions/assumptions in the kernel } *)
@@ -345,6 +351,7 @@ type rewrite_rule = {
 (** [(c, { lhs_pat = (u, elims); rhs })] in this list stands for [(PHSymbol (c,u), elims) ==> rhs] *)
 type rewrite_rules_body = {
   rewrules_rules : (Constant.t * rewrite_rule) list;
+  rewrules_always: bool;
 }
 
 (** {6 Module declarations } *)

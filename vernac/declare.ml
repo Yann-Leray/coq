@@ -1056,8 +1056,8 @@ let declare_possibly_mutual_parameters ~info ~cinfo ?(mono_uctx_extra=UState.emp
       (i+1, (name, Constr.mkConstU (cst,inst))::subst, (cst, univs)::csts)
   ) (0, [], []) cinfo typs)
 
-let make_recursive_bodies env ~typing_flags ~possible_guard ~rec_declaration =
-  let env = Environ.update_typing_flags ?typing_flags env in
+let make_recursive_bodies ?type_mode env ~typing_flags ~possible_guard ~rec_declaration =
+  let env = Environ.update_typing_flags ?type_mode ?typing_flags env in
   let indexes = Pretyping.search_guard env possible_guard rec_declaration in
   let mkbody i = match indexes with
   | Some indexes -> Constr.mkFix ((indexes,i), rec_declaration)
@@ -2130,7 +2130,7 @@ let prepare_proof ?(warn_incomplete=true) { proof; pinfo } =
       let fixrelevances = List.map (EConstr.ERelevance.kind evd) fixrelevances in
       let rec_declaration = prepare_recursive_declaration pinfo.cinfo fixtypes fixrelevances fixbodies in
       let typing_flags = pinfo.info.typing_flags in
-      fst (make_recursive_bodies env ~typing_flags ~possible_guard ~rec_declaration) in
+      fst (make_recursive_bodies ~type_mode:false env ~typing_flags ~possible_guard ~rec_declaration) in
   let proofs = List.map (fun (body, typ) -> ((body, eff), Some typ)) proofs in
   let () = if warn_incomplete then check_incomplete_proof evd in
   proofs, Evd.ustate evd

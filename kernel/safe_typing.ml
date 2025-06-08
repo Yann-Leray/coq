@@ -294,12 +294,12 @@ type 'a safe_transformer = safe_environment -> 'a * safe_environment
 
 (** {6 Typing flags } *)
 
-let set_typing_flags c senv =
-  let env = Environ.set_typing_flags c senv.env in
+let set_typing_flags ?type_mode c senv =
+  let env = Environ.set_typing_flags ?type_mode c senv.env in
   if env == senv.env then senv
   else { senv with env }
 
-let set_typing_flags flags senv =
+let set_typing_flags ?type_mode flags senv =
   (* NB: we allow changing the conv_oracle inside sections because it
      doesn't matter for consistency. *)
   if Option.has_some senv.sections
@@ -309,7 +309,7 @@ let set_typing_flags flags senv =
              share_reduction = flags.share_reduction;
             })
   then CErrors.user_err Pp.(str "Changing typing flags inside sections is not allowed.");
-  set_typing_flags flags senv
+  set_typing_flags ?type_mode flags senv
 
 let set_impredicative_set b senv =
   let flags = Environ.typing_flags senv.env in
@@ -349,12 +349,12 @@ let set_rewrite_rules_allowed b senv =
   else senv
 
 (* Temporary sets custom typing flags *)
-let with_typing_flags ?typing_flags senv ~f =
+let with_typing_flags ?type_mode ?typing_flags senv ~f =
   match typing_flags with
   | None -> f senv
   | Some typing_flags ->
     let orig_typing_flags = Environ.typing_flags senv.env in
-    let res, senv = f (set_typing_flags typing_flags senv) in
+    let res, senv = f (set_typing_flags ?type_mode typing_flags senv) in
     res, set_typing_flags orig_typing_flags senv
 
 (** {6 Stm machinery } *)
@@ -686,7 +686,7 @@ let add_retroknowledge pttc senv =
 type generic_name =
   | C of Constant.t
   | I of MutInd.t
-  | R
+  | R of RewriteRules.t
   | M of ModPath.t
   | MT of ModPath.t
 
@@ -705,7 +705,11 @@ let add_field ((l,sfb) as field) gn senv =
     | SFBmind mib, I mind -> Environ.add_mind mind mib senv.env
     | SFBmodtype mtb, MT mp -> Environ.add_modtype mp mtb senv.env
     | SFBmodule mb, M mp -> Modops.add_module mp mb senv.env
-    | SFBrules r, R -> Environ.add_rewrite_rules r.rewrules_rules senv.env
+    | SFBrules r, R rl ->
+      let env = Environ.add_rewrite_rules rl r senv.env in
+      if r.rewrules_always then
+        Environ.enable_rewrite_rules rl env
+      else env
     | _ -> assert false
   in
   let sections = match senv.sections with
@@ -1051,7 +1055,8 @@ let add_constant l decl senv =
   kn, senv
 
 let add_constant ?typing_flags l decl senv =
-  with_typing_flags ?typing_flags senv ~f:(add_constant l decl)
+  let type_mode = match decl with Entries.OpaqueEntry _ -> Some true | _ -> None in
+  with_typing_flags ?type_mode ?typing_flags senv ~f:(add_constant l decl)
 
 type opaque_certificate = {
   opq_body : Constr.t;
@@ -1160,7 +1165,8 @@ let add_rewrite_rules l rules senv =
   if Option.has_some senv.sections
   then CErrors.user_err Pp.(str "Adding rewrite rules not supported in sections.");
   (* TODO: Hashconsing? *)
-  add_field (l, SFBrules rules) R senv
+  let kn = RewriteRules.make (ModPath.dp senv.modpath) l in
+  add_field (l, SFBrules rules) (R kn) senv
 
 (** Insertion of inductive types *)
 
@@ -1444,7 +1450,7 @@ let add_include me is_module inl senv =
         C (Mod_subst.constant_of_delta_kn resolver (KerName.make mp_sup l))
       | SFBmind _ ->
         I (Mod_subst.mind_of_delta_kn resolver (KerName.make mp_sup l))
-      | SFBrules _ -> R
+      | SFBrules _ -> R (RewriteRules.make (ModPath.dp mp_sup) l)
       | SFBmodule _ -> M (MPdot (mp_sup, l))
       | SFBmodtype _ -> MT (MPdot (mp_sup, l))
     in

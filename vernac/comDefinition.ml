@@ -135,7 +135,7 @@ let do_definition ?loc ?hook ~name ?scope ?clearbody ~poly ~cumulative ?typing_f
 
 let do_definition_program ?loc ?hook ~pm ~name ~scope ?clearbody ~poly ~cumulative ?typing_flags ~kind ?using ?user_warns udecl bl red_option c ctypopt =
   let env = Global.env() in
-  let env = Environ.update_typing_flags ?typing_flags env in
+  let env = Environ.update_typing_flags ~type_mode:true ?typing_flags env in
   (* Explicitly bound universes and constraints *)
   let evd, udecl = interp_cumul_univ_decl_opt env udecl in
   let evd, (body, types), impargs =
@@ -151,7 +151,7 @@ let do_definition_program ?loc ?hook ~pm ~name ~scope ?clearbody ~poly ~cumulati
 
 let do_definition_interactive ?loc ~program_mode ?hook ~name ~scope ?clearbody ~poly ~cumulative ~typing_flags ~kind ?using ?user_warns udecl bl t =
   let env = Global.env () in
-  let env = Environ.update_typing_flags ?typing_flags env in
+  let env = Environ.update_typing_flags ~type_mode:true ?typing_flags env in
   let flags = Pretyping.{ all_no_fail_flags with program_mode } in
   let evd, udecl = Constrintern.interp_cumul_univ_decl_opt env udecl in
   let evd, args, typ, impargs = interp_statement ~program_mode ~flags ~scope env evd name bl t in
@@ -171,7 +171,7 @@ let info = Declare.Info.make ?hook ~poly ~cumulative ~scope ?clearbody ~kind ~ud
 
 let do_definition_refine ?loc ?hook ~name ~scope ?clearbody ~poly ~typing_flags ~kind ?using ?user_warns udecl bl c ctypopt =
   let env = Global.env() in
-  let env = Environ.update_typing_flags ?typing_flags env in
+  let env = Environ.update_typing_flags ~type_mode:true ?typing_flags env in
   (* Explicitly bound universes and constraints *)
   let evd, udecl = interp_cumul_univ_decl_opt env udecl in
   let evd, (body, typ), impargs =

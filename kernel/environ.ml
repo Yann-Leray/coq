@@ -66,15 +66,14 @@ type env = {
   env_inductives : mind_key Mindmap_env.t;
   env_modules : module_body MPmap.t;
   env_modtypes : module_type_body MPmap.t;
+  env_rewrite_rules : rewrite_rules_body RRmap.t;
   env_named_context : named_context_val; (* section variables *)
   env_rel_context   : rel_context_val;
   env_universes : UGraph.t;
   env_qualities : Sorts.QVar.Set.t;
-  symb_pats : rewrite_rule list Cmap_env.t;
   env_typing_flags  : typing_flags;
   vm_library : Vmlibrary.t;
   retroknowledge : Retroknowledge.retroknowledge;
-  rewrite_rules_allowed : bool;
 
   (* caches *)
   env_nb_rel        : int;
@@ -82,10 +81,11 @@ type env = {
   irr_inds : Sorts.relevance Indmap_env.t;
   constant_hyps : Id.Set.t Cmap_env.t;
   inductive_hyps : Id.Set.t Mindmap_env.t;
+  symb_pats : rewrite_rule list Cmap_env.t;
 }
 
 type rewrule_not_allowed = Symb | Rule
-exception RewriteRulesNotAllowed of rewrule_not_allowed
+exception RewriteRulesNotAllowed of rewrule_not_allowed option
 
 let empty_named_context_val = {
   env_named_ctx = [];
@@ -103,6 +103,7 @@ let empty_env = {
   env_inductives = Mindmap_env.empty;
   env_modules = MPmap.empty;
   env_modtypes = MPmap.empty;
+  env_rewrite_rules = RRmap.empty;
   constant_hyps = Cmap_env.empty;
   inductive_hyps = Mindmap_env.empty;
   env_named_context = empty_named_context_val;
@@ -116,7 +117,6 @@ let empty_env = {
   env_typing_flags = Declareops.safe_flags Conv_oracle.empty;
   vm_library = Vmlibrary.empty;
   retroknowledge = Retroknowledge.empty;
-  rewrite_rules_allowed = false;
 }
 
 
@@ -223,18 +223,84 @@ let lookup_constant kn env =
 
 let mem_constant kn env = Cmap_env.mem kn env.env_constants
 
-let add_rewrite_rules l env =
-  if not env.rewrite_rules_allowed then raise (RewriteRulesNotAllowed Rule);
+let mem_rewrite_rules rrl env =
+  RRmap.mem rrl env.env_rewrite_rules
+
+let lookup_rewrite_rules rrl env =
+  RRmap.find rrl env.env_rewrite_rules
+
+let add_rewrite_rules rrl rules env =
+  { env with env_rewrite_rules = RRmap.add rrl rules env.env_rewrite_rules }
+
+let get_enabled_rewrite_rules_flags flags =
+  match flags.enabled_rewrite_rules with
+  | Some rrset -> rrset
+  | None -> raise (RewriteRulesNotAllowed None)
+
+let get_enabled_rewrite_rules env = get_enabled_rewrite_rules_flags env.env_typing_flags
+
+
+let find_symbol_rewrite_rules cst env =
+  Cmap_env.find cst env.symb_pats
+
+let register_rewrite_rules rules env =
   let add c r = function
     | None -> anomaly Pp.(str "Trying to add a rule to non-symbol " ++ Constant.print c ++ str".")
     | Some rs -> Some (r::rs)
   in
   { env with
-    symb_pats = List.fold_left (fun symb_pats (c, r) -> Cmap_env.update c (add c r) symb_pats) env.symb_pats l
+    symb_pats = List.fold_left (fun symb_pats (c, r) -> Cmap_env.update c (add c r) symb_pats) env.symb_pats rules.rewrules_rules
   }
 
-let lookup_rewrite_rules cst env =
-  Cmap_env.find cst env.symb_pats
+let sync_rewrite_rules ~type_mode prev_rules env =
+  let rrset = match get_enabled_rewrite_rules env with rrset -> rrset | exception RewriteRulesNotAllowed _ ->
+    anomaly Pp.(str"Trying to remove \"-allowed-rewrite-rules\" flag")
+  in
+  let rrset = if type_mode then Option.default rrset env.env_typing_flags.enabled_rewrite_rules_type else rrset in
+  let prev_rules = Option.default RRset.empty prev_rules in
+  (* Efficient symmetric difference function ? *)
+  let new_rules, removed_rules = RRset.diff rrset prev_rules, RRset.diff prev_rules rrset in
+
+  let rules_to_add, env =
+    if RRset.is_empty removed_rules then
+      new_rules, env
+    else
+      rrset, { env with symb_pats = Cmap_env.map (fun _ -> []) env.symb_pats }
+  in
+  RRset.fold (fun rrl env ->
+    let rr = lookup_rewrite_rules rrl env in
+    register_rewrite_rules rr env)
+    rules_to_add env
+
+let rewrite_rules_type_different env = Option.has_some env.env_typing_flags.enabled_rewrite_rules_type
+
+let resync_rewrite_rules_type env =
+  if rewrite_rules_type_different env then
+    sync_rewrite_rules ~type_mode:false None env
+  else
+    env
+
+let resync_rewrite_rules_body env =
+  let type_rr = env.env_typing_flags.enabled_rewrite_rules_type in
+  if Option.has_some type_rr then
+    sync_rewrite_rules ~type_mode:false type_rr env
+  else
+    env
+
+let enable_rewrite_rules_flags kn flags =
+  { flags with
+    enabled_rewrite_rules = Some (RRset.add kn (get_enabled_rewrite_rules_flags flags));
+    enabled_rewrite_rules_type = Option.map (RRset.add kn) flags.enabled_rewrite_rules_type; }
+
+let enable_rewrite_rules_body_flags kn flags =
+  { flags with
+    enabled_rewrite_rules = Some (RRset.add kn (get_enabled_rewrite_rules_flags flags));
+    enabled_rewrite_rules_type = Some (get_enabled_rewrite_rules_flags flags) }
+
+let enable_rewrite_rules kn env =
+  let env = { env with env_typing_flags = enable_rewrite_rules_flags kn env.env_typing_flags } in
+  register_rewrite_rules (lookup_rewrite_rules kn env) env
+
 
 (* Mutual Inductives *)
 let lookup_mind_key kn env =
@@ -531,6 +597,8 @@ let same_flags {
      impredicative_set;
      sprop_allowed;
      allow_uip;
+     enabled_rewrite_rules;
+     enabled_rewrite_rules_type;
   } alt =
   check_guarded == alt.check_guarded &&
   check_positive == alt.check_positive &&
@@ -542,20 +610,30 @@ let same_flags {
   enable_native_compiler == alt.enable_native_compiler &&
   impredicative_set == alt.impredicative_set &&
   sprop_allowed == alt.sprop_allowed &&
-  allow_uip == alt.allow_uip
+  allow_uip == alt.allow_uip &&
+  enabled_rewrite_rules == alt.enabled_rewrite_rules &&
+  enabled_rewrite_rules_type == alt.enabled_rewrite_rules_type
 [@warning "+9"]
 
 let set_type_in_type b = map_universes (UGraph.set_type_in_type b)
 
-let set_typing_flags c env =
+let set_typing_flags ?type_mode c env =
   if same_flags env.env_typing_flags c then env
   else
-    let env = { env with env_typing_flags = c } in
-    let env = set_type_in_type (not c.check_universes) env in
-    env
+    let () = if Option.is_empty type_mode && Option.has_some c.enabled_rewrite_rules_type then
+      CErrors.user_err Pp.(str"Body rewrite rules are only supported for opaque definitions")
+    in
+    let type_mode = Option.default false type_mode in
+    let newenv = { env with env_typing_flags = c } in
+    let newenv = set_type_in_type (not c.check_universes) newenv in
+    if env.env_typing_flags.enabled_rewrite_rules == c.enabled_rewrite_rules &&
+      env.env_typing_flags.enabled_rewrite_rules_type == c.enabled_rewrite_rules_type then
+      newenv
+    else
+      sync_rewrite_rules ~type_mode (if type_mode then env.env_typing_flags.enabled_rewrite_rules_type else env.env_typing_flags.enabled_rewrite_rules) newenv
 
-let update_typing_flags ?typing_flags env =
-  Option.cata (fun flags -> set_typing_flags flags env) env typing_flags
+let update_typing_flags ?type_mode ?typing_flags env =
+  Option.cata (fun flags -> set_typing_flags ?type_mode flags env) env typing_flags
 
 let set_impredicative_set b env =
   set_typing_flags {env.env_typing_flags with impredicative_set=b} env
@@ -571,15 +649,19 @@ let sprop_allowed env = env.env_typing_flags.sprop_allowed
 let allow_rewrite_rules env =
   (* We need to be safe with reduction machines *)
   let flags = typing_flags env in
-  let env = set_typing_flags
+  if Option.has_some flags.enabled_rewrite_rules then env else
+  set_typing_flags
     { flags with
       enable_VM = false;
-      enable_native_compiler = false }
+      enable_native_compiler = false;
+      enabled_rewrite_rules = Some RRset.empty; }
     env
-  in
-  { env with rewrite_rules_allowed = true }
 
-let rewrite_rules_allowed env = env.rewrite_rules_allowed
+let rewrite_rules_allowed env =
+  match get_enabled_rewrite_rules env with
+  | _ -> true
+  | exception RewriteRulesNotAllowed _ -> false
+
 
 (* Global constants *)
 
@@ -596,7 +678,7 @@ let add_constant_key kn cb linkinfo env =
   let symb_pats =
     match cb.const_body with
     | Symbol _ ->
-      if not env.rewrite_rules_allowed then raise (RewriteRulesNotAllowed Symb);
+      if not (rewrite_rules_allowed env) then raise (RewriteRulesNotAllowed (Some Symb));
       Cmap_env.add kn [] env.symb_pats
     | _ -> env.symb_pats
   in

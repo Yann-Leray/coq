@@ -455,7 +455,7 @@ let solve ?with_end_tac gi info_lvl tac pr =
       else tac
     in
     let env = Global.env () in
-    let env = Environ.update_typing_flags ?typing_flags:pr.typing_flags env in
+    let env = Environ.update_typing_flags ~type_mode:false ?typing_flags:pr.typing_flags env in
     let (p,(_env,status,info),()) = run_tactic env tac pr in
     let () = register_side_effects (Evd.eval_side_effects (Proofview.return p.proofview)) in
     let env = Global.env () in

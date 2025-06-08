@@ -39,9 +39,12 @@ let rec fill_assumptions env sigma = function
     [f:=?x]. When the proof ends, [f] is defined as the value of [?x]
     and [lemma] as the proof. *)
 let start_deriving ~atts bl suchthat name : Declare.Proof.t =
+  let {
+    scope; polymorphic=poly; program=program_mode;
+    user_warns; typing_flags; using; clearbody;
+    } = atts
+  in
 
-  let scope, _local, poly, program_mode, user_warns, typing_flags, using, clearbody =
-    atts.scope, atts.locality, atts.polymorphic, atts.program, atts.user_warns, atts.typing_flags, atts.using, atts.clearbody in
   if program_mode then CErrors.user_err (Pp.str "Program mode not supported.");
 
   let env = Global.env () in
