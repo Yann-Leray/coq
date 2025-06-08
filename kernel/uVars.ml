@@ -635,7 +635,8 @@ module Instance : sig
   val levels : t -> Quality.Set.t * Level.Set.t
   type mask = Quality.pattern array * int option array
 
-  val pattern_match : mask -> t -> ('term, Quality.t, Universe.t) Partial_subst.t -> ('term, Quality.t, Universe.t) Partial_subst.t option
+  val pattern_match : (Quality.t -> Quality.t -> bool) * (Universe.t -> Universe.t -> bool) ->
+    mask -> t -> ('term, Quality.t, Universe.t) Partial_subst.t -> ('term, Quality.t, Universe.t) Partial_subst.t option
 
 end =
 struct
@@ -727,11 +728,11 @@ let equal (xq,xu) (yq,yu) =
 
 type mask = Quality.pattern array * int option array
 
-let pattern_match (qmask, umask) (qs, us) tqus =
-  let tqus = Array.fold_left2 (fun tqus mask u -> Partial_subst.maybe_add_univ mask u tqus) tqus umask us in
-  match Array.fold_left2 (fun tqus mask q -> Quality.pattern_match mask q tqus |> function Some tqs -> tqs | None -> raise_notrace Exit) tqus qmask qs with
-  | tqs -> Some tqs
-  | exception Exit -> None
+  let pattern_match (qconv, uconv) (qmask, umask) (qs, us) tqus =
+    let (let*) = Option.bind in
+    let* tqus = Option.Array.fold_left2 (fun tqus mask q -> Quality.pattern_match qconv mask q tqus) tqus qmask qs in
+    let* tqus = Option.Array.fold_left2 (fun tqus mask u -> Partial_subst.maybe_add_univ_or_conv uconv mask u tqus) tqus umask us in
+    Some tqus
 
 end
 
