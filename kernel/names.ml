@@ -1052,6 +1052,8 @@ module RewriteRules = struct
 
   let to_string { library = d ; id } =
     DirPath.to_string d ^ "." ^ Label.to_string id
+
+  let print kn = str (to_string kn)
 end
 
 module RRmap = HMap.Make(RewriteRules)

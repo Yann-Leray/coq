@@ -1035,6 +1035,7 @@ type axiom =
   | Guarded of GlobRef.t
   | TypeInType of GlobRef.t
   | UIP of MutInd.t
+  | RewriteRules of GlobRef.t * RRset.t * RRset.t option
 
 type context_object =
   | Variable of Id.t (* A section variable or a Let definition *)
@@ -1057,6 +1058,8 @@ struct
     | Guarded k1 , Guarded k2
     | TypeInType k1, TypeInType k2 ->
       GlobRef.CanOrd.compare k1 k2
+    | RewriteRules (kn, _, _), RewriteRules (kn2, _, _) ->
+      GlobRef.CanOrd.compare kn kn2
     | Constant _, _ -> -1
     | _, Constant _ -> 1
     | Positive _, _ -> -1
@@ -1065,6 +1068,8 @@ struct
     | _, Guarded _ -> 1
     | TypeInType _, _ -> -1
     | _, TypeInType _ -> 1
+    | RewriteRules _, _ -> -1
+    | _, RewriteRules _ -> 1
 
   let compare x y =
     match x , y with
@@ -1117,6 +1122,17 @@ let pr_assumptionset env sigma s =
       try str " " ++ pr_ltype_env env sigma typ
       with e when CErrors.noncritical e -> mt ()
     in
+    let pr_rrs rrs =
+      prlist_with_sep spc RewriteRules.print (RRset.elements rrs)
+    in
+    let pr_rrs_pair rrs rtso =
+      let rrs, rps_text = match rtso with
+      | None -> rrs, mt()
+      | Some rts ->
+          rts, spc() ++ str "and its proof additionally relies on" ++ spc() ++ pr_rrs (RRset.diff rrs rts)
+      in
+      str "relies on" ++ spc() ++ pr_rrs rrs ++ rps_text ++ strbrk"."
+    in
     let pr_axiom env ax typ =
       match ax with
       | Constant kn ->
@@ -1129,6 +1145,8 @@ let pr_assumptionset env sigma s =
           hov 2 (safe_pr_global env gr ++ spc () ++ strbrk"relies on an unsafe hierarchy.")
       | UIP mind ->
           hov 2 (safe_pr_inductive env mind ++ spc () ++ strbrk"relies on definitional UIP.")
+      | RewriteRules (gr, rrs, rtso) ->
+          hov 2 (safe_pr_global env gr ++ spc () ++ pr_rrs_pair rrs rtso)
     in
     let fold t typ accu =
       let (v, a, o, tr) = accu in
@@ -1164,7 +1182,10 @@ let pr_assumptionset env sigma s =
     in
     let theory =
       if rewrite_rules_allowed env then
-        str "Rewrite rules are allowed (subject reduction might be broken)" :: theory
+        let rrs = get_enabled_rewrite_rules env in
+        str "Rewrite rules are allowed (subject reduction might be broken);" ++
+        spc() ++ str "enabled rules: " ++ (if RRset.is_empty rrs then str"(none)" else pr_rrs rrs)
+        :: theory
       else theory
     in
     let theory =
