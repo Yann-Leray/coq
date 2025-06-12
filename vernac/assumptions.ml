@@ -385,6 +385,13 @@ let assumptions ?(add_opaque=false) ?(add_transparent=false) access st grs =
           let l = try GlobRef.Map_env.find obj ax2ty with Not_found -> [] in
           ContextObjectMap.add (Axiom (TypeInType obj, l)) Constr.mkProp accu
       in
+      let accu =
+        match cb.const_typing_flags.enabled_rewrite_rules with
+        | Some rrs when not (RRset.is_empty rrs) ->
+          let l = try GlobRef.Map_env.find obj ax2ty with Not_found -> [] in
+          ContextObjectMap.add (Axiom (RewriteRules (obj, rrs, cb.const_typing_flags.enabled_rewrite_rules_type), l)) Constr.mkProp accu
+        | Some _ | None -> accu
+      in
     if not (Option.has_some contents) then
       let t = type_of_constant cb in
       let l = try GlobRef.Map_env.find obj ax2ty with Not_found -> [] in
