@@ -264,7 +264,8 @@ let check_constant (cst, ustate) trace env l info1 cb2 subst1 subst2 =
                Anyway [check_conv] will handle that afterwards. *)
             check_conv NotConvertibleBodyField cst poly CONV env c1 c2))
 
-let check_rewrite_rules (cst, ustate) trace env l rrb =
+let check_rewrite_rules (cst, ustate) trace env l rrb subst2 =
+  let rrb = Declareops.subst_rewrite_rules subst2 rrb in
   let evar_handler =
     let evar_expand (ev, inst) =
       CClosure.EvarUndefined (ev, inst |> SList.to_list |> List.map Option.get)
@@ -305,7 +306,7 @@ and check_signatures (cst, ustate) trace env mp1 sig1 mp2 sig2 subst1 subst2 res
             check_inductive (cst, ustate) trace env mp1 l (get_obj mp1 map1 l)
               mp2 mib2 subst1 subst2 reso1 reso2
         | SFBrules rrb ->
-            check_rewrite_rules (cst, ustate) trace env l rrb
+            check_rewrite_rules (cst, ustate) trace env l rrb subst2
         | SFBmodule msb2 ->
             let mp1' = MPdot (mp1, l) in
             let mp2' = MPdot (mp2, l) in
