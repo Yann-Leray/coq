@@ -254,6 +254,9 @@ val define : Evar.t -> econstr -> evar_map -> evar_map
       {- All the evars present in the constr should be present in the evar map.}
     } *)
 
+val define_rr : Evar.t -> econstr -> evar_map -> evar_map
+(** Set an evar rr to the given constr *)
+
 val define_with_evar : Evar.t -> econstr -> evar_map -> evar_map
 (** Same as [define ev body evd], except the body must be an existential variable [ev'].
     This additionally makes [ev'] inherit the [obligation] and [typeclass] flags of [ev]. *)

@@ -765,8 +765,8 @@ let inherit_evar_flags evar_flags evk evk' =
 
 (** Removal: in all other cases of definition *)
 
-let remove_evar_flags evk evar_flags =
-  if Evar.Set.mem evk evar_flags.rewrite_rule_evars then
+let remove_evar_flags ?(block_rr=true) evk evar_flags =
+  if block_rr = Evar.Set.mem evk evar_flags.rewrite_rule_evars then
     CErrors.anomaly Pp.(str "Tried to define or restrict a rewrite rule evar.");
   { typeclass_evars = Evar.Set.remove evk evar_flags.typeclass_evars;
     obligation_evars = Evar.Set.remove evk evar_flags.obligation_evars;
@@ -774,7 +774,7 @@ let remove_evar_flags evk evar_flags =
     (* Aliasing information is kept. *)
     aliased_evars = evar_flags.aliased_evars;
     (* Cannot be a rewrite rule evar *)
-    rewrite_rule_evars = evar_flags.rewrite_rule_evars
+    rewrite_rule_evars = Evar.Set.remove evk evar_flags.rewrite_rule_evars
   }
 
 (** New evars *)
@@ -1405,9 +1405,12 @@ let define_gen evk body evd evar_flags =
   { evd with defn_evars; undf_evars; last_mods; evar_names; evar_flags; candidate_evars }
 
 (** By default, the obligation and evar tag of the evar is removed *)
-let define evk body evd =
-  let evar_flags = remove_evar_flags evk evd.evar_flags in
+let define ?block_rr evk body evd =
+  let evar_flags = remove_evar_flags ?block_rr evk evd.evar_flags in
   define_gen evk body evd evar_flags
+
+let define_rr = define ~block_rr:false
+let define evk body evd = define evk body evd
 
 (** In case of an evar-evar solution, the flags are inherited *)
 let define_with_evar evk body evd =

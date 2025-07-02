@@ -182,7 +182,7 @@ let new_type_evar env evd sigma ?loc () =
   let sigma = ExtraEnv.add_quality q ~bound:false sigma in
   let sigma = ExtraEnv.add_universe u ~bound:false sigma in
   let s = mkSort (Sorts.qsort q (Univ.Universe.make u)) in
-  let evd, c = GlobEnv.new_evar env evd ~src:(loc, knd) ~naming (EConstr.of_constr s) in
+  let evd, c = GlobEnv.new_evar env evd ~src:(loc, knd) ~rrpat:true ~naming (EConstr.of_constr s) in
   let evk, _ = EConstr.destEvar evd c in
   let sigma = ExtraEnv.add_evar evk (Environ.rel_context !!env) s Relevant Anonymous sigma in
   evd, sigma, q, u, evk
@@ -790,7 +790,7 @@ let merge_into_evd evd defs qcstrs ucstrs =
     let invsubst = List.rev_map (fun decl -> mkVar (Context.Named.Declaration.get_id decl)) ctx in
 
     let def = EConstr.of_constr @@ CVars.substl invsubst def in
-    let evd = Evd.define evk def evd in
+    let evd = Evd.define_rr evk def evd in
     evd
     ) defs evd
   in
