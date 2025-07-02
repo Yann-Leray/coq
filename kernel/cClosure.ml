@@ -111,7 +111,15 @@ and finvert = fconstr array
 
 let get_invert fiv = fiv
 
-let fterm_of v = v.term
+let rec fterm_of v =
+  match[@ocaml.warning "-4"] v.term with
+  | FApp (f, args) as fterm ->
+    begin match fterm_of f with
+    | FApp (f, args0) -> FApp (f, Array.append args0 args)
+    | _ -> fterm
+    end
+  | fterm -> fterm
+
 let set_ntrl v = v.mark <- Ntrl
 
 (* Could issue a warning if no is still Red, pointing out that we loose
