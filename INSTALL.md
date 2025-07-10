@@ -1,3 +1,57 @@
+Installation instructions
+=========================
+
+To install and use this fork of Rocq, we recommend using a package manager.
+
+
+OPAM instructions
+-----------------
+
+To install Rocq in an OPAM switch, follow these instructions:
+
+```sh
+opam pin add . -n
+# Register the packages here but don't install, they are not all needed
+
+opam repo add rocq-core-dev https://rocq-prover.org/opam/core-dev
+# Necessary for the standard library with this development version
+
+opam install rocq-prover
+# You may also want to install rocqide
+```
+
+To install additional packages from the Rocq environment:
+
+```sh
+opam repo add rocq-extra-dev https://rocq-prover.org/opam/extra-dev
+# The repository where most development versions are available
+
+opam install <package>
+# e.g. rocq-equations (*) or vscoq-language-server
+```
+
+(*) Note that these packages are kept in sync with the development version of Rocq,
+so they may become incompatible with this prototype fork.
+
+If so, you can go to the development repo of the package, find the latest commit before
+2025-07-11 and use opam to pin the package to the specific commit.
+For instance, for equations, `opam pin add rocq-equations "git+https://github.com/mattam82/Coq-Equations.git#f286195dcd21fa0c6b736357df5dcea8267f517b"`
+
+
+Using the prototype
+===================
+
+To test files, you need to enable rewrite rules in Rocq.
+This is generally done by passing the command-line flag "-allow-rewrite-rules"
+to the program running Rocq (it can be rocq itself, rocqide, vscoqtop, coq-lsp, etc.)
+
+For rocq or rocqide, simply pass the flag to the command line.
+For VSCode integration, there should be an "args" setting in the extension to pass additional command-line arguments.
+For Proof General, there should be a variable called PG-prog-args to pass the flag (not tested).
+
+
+Below are the original installation instructions for Rocq, including if you want to build from source.
+
 Installing From Sources
 =======================
 

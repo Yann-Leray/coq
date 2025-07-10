@@ -1,3 +1,11 @@
+# The Rocq Prover with local abstraction of computation rules
+
+This is a fork of the Rocq Prover.
+
+Installation instructions available in [`INSTALL.md`](INSTALL.md).
+
+Below is the original README for Rocq.
+
 # The Rocq Prover
 
 [![GitLab CI][gitlab-badge]][gitlab-link]
