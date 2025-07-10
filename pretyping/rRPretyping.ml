@@ -290,7 +290,7 @@ let pretype_case pretype_argpattern env evd sigma ?loc ind ind_annots pc jc (na,
   let sr = Sorts.qsort qr (Univ.Universe.make ur) in
 
   let (evd, sigma, pp, p) =
-    let hypnaming = RenameExistingBut (VarSet.variables (Global.env ())) in
+    let hypnaming = VarSet.variables (Global.env ()) in
     let pctx, p_env = GlobEnv.push_rel_context ~hypnaming evd (EConstr.of_rel_context pctx) env in
     let ret = Option.default (DAst.make ?loc (GHole GInternalHole)) po in
     let evd, sigma, pp, j_p = pretype_argpattern (mkSort sr, Sorts.Relevant) p_env evd sigma ret in
@@ -310,7 +310,7 @@ let pretype_case pretype_argpattern env evd sigma ?loc ind ind_annots pc jc (na,
 
     let bctx, _ = List.chop mip.mind_consnrealdecls.(i) ctx in
     let bctx = instantiate_context u paramsubst brnas bctx in
-    let hypnaming = RenameExistingBut (VarSet.variables (Global.env ())) in
+    let hypnaming = VarSet.variables (Global.env ()) in
     let bctx, br_env = GlobEnv.push_rel_context ~hypnaming evd (EConstr.of_rel_context bctx) env in
     let cty = CVars.substnl paramsubst mip.mind_consnrealdecls.(i) (CVars.subst_instance_constr u cty) in
 
@@ -484,7 +484,7 @@ and pretype_app (f, args) =
     let open Context.Rel.Declaration in
     let binder = Context.make_annot Anonymous (ERelevance.make @@ Sorts.RelevanceVar qty) in
     let decl = LocalAssum (binder, EConstr.mkEvar (evkty, SList.of_full_list (List.init (Environ.nb_rel !!env) (fun i -> EConstr.mkRel (i+1))))) in
-    let hypnaming = RenameExistingBut (VarSet.variables (Global.env ())) in
+    let hypnaming = VarSet.variables (Global.env ()) in
     let evd, sigma, qret, uret, evkret = new_type_evar (snd @@ push_rel ~hypnaming evd decl env) evd sigma ?loc () in
 
     let sigma, (argty, argrel, retty) = reduce_to_prod !!env sigma ((evkty, qty, uty), (evkret, qret, uret)) (j_type fj) in
@@ -536,7 +536,7 @@ and pretype_lambda (name, bk, c1, c2) =
   let binder = {binder_name = name; binder_relevance = ERelevance.make @@ Sorts.RelevanceVar q} in
   let var = LocalAssum (binder, EConstr.of_constr jty.uj_val) in
   let vars = VarSet.variables (Global.env ()) in
-  let hypnaming = RenameExistingBut vars in
+  let hypnaming = vars in
   let var',env' = push_rel ~hypnaming evd var env in
   let binder = {binder_name = get_name var'; binder_relevance = Sorts.RelevanceVar q} in
 
@@ -555,7 +555,7 @@ and pretype_prod (name, bk, c1, c2) =
   let binder = {binder_name = name; binder_relevance = ERelevance.make @@ Sorts.RelevanceVar qdom} in
   let var = LocalAssum (binder, EConstr.of_constr jdom.uj_val) in
   let vars = VarSet.variables (Global.env ()) in
-  let hypnaming = RenameExistingBut vars in
+  let hypnaming = vars in
   let var',env' = push_rel ~hypnaming evd var env in
   let binder = {binder_name = get_name var'; binder_relevance = Sorts.RelevanceVar qdom} in
 
@@ -800,7 +800,7 @@ let merge_into_evd evd defs qcstrs ucstrs =
 let eval_pretyper_pattern env evd c =
   let open Rewrite_rules_ops in
   let vars = VarSet.variables (Global.env ()) in
-  let hypnaming = RenameExistingBut vars in
+  let hypnaming = vars in
   let env = GlobEnv.make ~hypnaming env evd empty_lvar in
   let sigma = ExtraEnv.empty in
   let evd, sigma, p, j = eval_pretyper_pattern env evd sigma c in

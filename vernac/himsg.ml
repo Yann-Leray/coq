@@ -1230,7 +1230,7 @@ let explain_not_match_error = function
       Evar.Map.fold (fun ev (ctx, ty, r, name) evd ->
         let name = match name with Anonymous -> None | Name id -> Some id in
         let vars = Evarutil.VarSet.variables (Global.env ()) in
-        let hypnaming = Evarutil.RenameExistingBut vars in
+        let hypnaming = vars in
         let (ctx, ty, inst, _) = Evarutil.push_rel_context_to_named_context ~hypnaming env evd (EConstr.of_constr ty) in
         let evd = Evd.add evd ev ?name (Evd.unsafe_make_evar_info ctx ty (EConstr.ERelevance.make r)) in
         evd) evd.Rewrite_rules_ops.evar_map (Evd.from_env env)
