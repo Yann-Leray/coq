@@ -797,7 +797,7 @@ let reduce_to_prod env evd ((evkty, qty, _uty), (evkret, _qret, _uret)) t =
       else evd
     in
     evd, (argty, argrel, retty)
-  | _ -> CErrors.anomaly (Pp.str "Typing in rewrite rules")
+  | _ -> CErrors.anomaly (Pp.str "Typing error in rewrite rules")
 
 let declare_ind_annots env evd ind (qinst_annot, uinst_annot, args_annot) =
 
@@ -845,7 +845,7 @@ let reduce_to_appind env evd ind (qinst_annot, uinst_annot, args_annot) t =
         let args = Array.map term_of_fconstr args in
         let evd = Array.fold_left2 (fun evd evk arg -> ExtraEnv.define_evar evk EQ arg evd) evd args_annot args in
         evd, (u, args)
-      | _ -> CErrors.anomaly (Pp.str "Typing in rewrite rules")
+      | _ -> CErrors.anomaly (Pp.str "Typing error in rewrite rules")
       end
   | FEvar (ev, inst, e, _) ->
 
@@ -865,7 +865,7 @@ let reduce_to_appind env evd ind (qinst_annot, uinst_annot, args_annot) t =
       else evd
     in
     evd, (u, args)
-  | _ -> CErrors.anomaly (Pp.str "Typing in rewrite rules")
+  | _ -> CErrors.anomaly (Pp.str "Typing error in rewrite rules")
 
 
 
