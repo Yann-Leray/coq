@@ -450,6 +450,10 @@ let generalize_evar_over_rels sigma (ev,args) =
       if isRel sigma a then (mkNamedProd_or_LetIn sigma d c,a::inst) else x)
      (Evd.evar_concl evi,[]) args sign
 
+let make_evar_instance sigma (evk, args) =
+  let evi = Evd.find_undefined sigma evk in
+  Evd.make_evar_instance_array evi args
+
 (************************************)
 (* Removing a dependency in an evar *)
 (************************************)

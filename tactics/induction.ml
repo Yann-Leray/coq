@@ -1564,3 +1564,21 @@ let induction ev clr c l e =
 let destruct ev clr c l e =
   induction_gen clr false ev e
     ((None,(c,NoBindings)),(None,l)) None
+
+
+let induction_destruct isrec with_evars (lc,elim) =
+  let open Induction2 in
+  match isrec, with_evars, lc, elim with
+  | true, _, [c, (None, None), (Some {onhyps=Some _} | None as cl)], Some elim ->
+      Proofview.Goal.enter begin fun gl ->
+      let env = Proofview.Goal.env gl in
+      let sigma = Proofview.Goal.sigma gl in
+      let inhyps = match cl with
+      | Some {onhyps=Some hyps} -> InList (List.map (fun ((_,id),_) -> id) hyps)
+      | _ -> AllMatchingBut Id.Set.empty
+      in
+      let _,c = force_destruction_arg false env sigma c in
+      onInductionArg (fun _ c ->
+        Induction2.induction_tac ~with_evars ~inhyps (with_no_bindings c) elim) c
+      end
+  | _ -> induction_destruct isrec with_evars (lc, elim)

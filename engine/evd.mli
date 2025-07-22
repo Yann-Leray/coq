@@ -312,6 +312,8 @@ val expand_existential : evar_map -> econstr pexistential -> econstr list
 
 val expand_existential0 : evar_map -> constr pexistential -> constr list
 
+val make_evar_instance_array : 'a evar_info -> etypes SList.t -> (variable * etypes) list
+
 val instantiate_evar_array : evar_map -> 'a evar_info -> econstr -> econstr SList.t -> econstr
 
 (** {6 Misc} *)

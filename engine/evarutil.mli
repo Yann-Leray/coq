@@ -250,6 +250,8 @@ val push_rel_context_to_named_context : hypnaming:naming_mode ->
 
 val generalize_evar_over_rels : evar_map -> existential -> types * constr list
 
+val make_evar_instance : evar_map -> existential -> (variable * constr) list
+
 val subterm_source : Evar.t -> ?where:Evar_kinds.subevar_kind -> Evar_kinds.t Loc.located ->
   Evar_kinds.t Loc.located
 

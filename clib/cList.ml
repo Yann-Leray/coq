@@ -597,6 +597,16 @@ let extract_first p li =
   in
   loop [] li
 
+let extract_nth i li =
+  let rec loop i rev_left = function
+    | [] -> raise Not_found
+    | x :: right ->
+       if i <= 0 then List.rev_append rev_left right, x
+       else loop (pred i) (x :: rev_left) right
+  in
+  if i < 0 then invalid_arg "Negative index";
+  loop i [] li
+
 let insert p v l =
   let rec insrec = function
     | [] -> [v]

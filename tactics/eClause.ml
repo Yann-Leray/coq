@@ -199,14 +199,14 @@ let progress_evar_clause env sigma clause arg =
   | None ->
       user_err Pp.(str "Could not find adequate binder.") (* TODO: Turn into proper exception *)
 
-let find_progress_evar_clause (type a) env sigmaholes arg =
-  let sigmaholes = Array.map_of_list (fun (sigma, holes, rest) -> sigma, Array.rev_of_list holes, (holes, rest)) sigmaholes in
-  let max_length = Array.fold_left (fun m (_, a, _) -> max m (Array.length a)) 0 sigmaholes in
-  let exception Found of (Evd.evar_map * (hole list * a)) in
+let find_progress_evar_clause env sigmaholes arg =
+  let sigmaholes = Array.map_of_list (fun (sigma, holes, rest) -> sigma, Array.rev_of_list holes) sigmaholes in
+  let max_length = Array.fold_left (fun m (_, a) -> max m (Array.length a)) 0 sigmaholes in
+  let exception Found of (Evd.evar_map * int) in
   match for j = 0 to max_length - 1 do
-    Array.iter (fun (sigma, holes, rest) ->
+    Array.iter (fun (sigma, holes) ->
     match define_with_type sigma env holes.(j).hole_evar arg with
-    | sigma -> raise (Found (sigma, rest))
+    | sigma -> raise (Found (sigma, j))
     | exception Invalid_argument _ -> () (* index out of bounds *)
     | exception e when CErrors.noncritical e -> ())
     sigmaholes

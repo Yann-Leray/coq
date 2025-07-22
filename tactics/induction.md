@@ -21,63 +21,68 @@ Using the names above:
 
 Since most of what the tactic does is the same between destruct and induction, we can do a first step to make sure that the same function can do the following steps in both cases.
 
-The idea is that `elim_ind ?p1 .. ?pn ?P1 .. ?Pn ?H1 .. ?Hn ?i1 .. ?in ?t` behaves similarly to `match ?t as t in I _ _ i1 .. in return ?P ?i1 .. ?in with C1 a1 .. an => ?H1 | .. | Cn a1 .. an => ?Hn end`
+The idea is that `elim_ind ?p1 .. ?pn ?P1 .. ?Pn ?H1 .. ?Hn ?i1 .. ?in ?t` behaves similarly to `match ?t as t in I _ _ i1 .. in return ?P@{?i1; ..; ?in} with C1 a1 .. an => ?H1 | .. | Cn a1 .. an => ?Hn end`
 
-The pattern matching is the ending point we want to reach, so a situation where we have
+The pattern matching is pretty much the ending point we want to reach, so a situation where we have
 - a main predicate `?P@{i1; ..; in} : Sort`
-- `[the whole term] : ?P@{i1 := ?i1; .. in := ?in}` (might not all be pure evars, pattern recognition if not)
-- `?Hk@{a1; ..; an} : ?Pj@{i1 := iC1; .. in := iCn}` (called obligations or branches)
+- `[the whole term] : ?P@{i1 := t1; .. in := tn}`, with main instance `t1; ..; tn`
+- `?Hk@{a1; ..; an} : forall Γk, ?Pj@{i1 := iC1; .. in := iCn}` (called obligations or branches, we keep a mix of products and partially instantiated evars)
 - other evars (including other predicates `?P1 .. ?Pn`)
-- (optional) a special evar `?t` (or many ?) for the discriminee / main argument
 
 
 For our eliminator, this means that we need to:
-- apply it fully to evars (and instantiate with given bindings)
-  + if we find products (as with combined schemes), we can project using the inductive type as a needed hint
-- identify the main predicate (`?P`), all other predicates and all obligations, among the created evars
-  + the main predicate is `?P` if the return type of the eliminator is `?P i1 .. in` (needs to be of that shape, ik need not be variables)
-  + the obligations are the hypotheses which (1) return `?P j1 .. jn` / (2) don't appear dependently in the type
-  + the other predicates are (only with 2) the `?Pi` for all return types of the obligations with shapes `?Pi j1 .. jn` (need to be of that shape)
-  + the special evar(s) are the last hypotheses if regular induction, the last argument(s) of the return type if functional induction
-- for the main predicate, intros the indices / parameters
-  + use the names in the return type of the eliminator if they are variables, create name otherwise
-- (only if 2) for the other predicates, intros the indices / parameters (no given names !)
-- for obligations, intros the hypotheses before the final goal (one of the predicates) -> using the intropattern
-
+- apply it fully to evars (and instantiate with given bindings) [done through eclauses]
+  + if we find products [Hipattern tuples] (as with combined schemes), we can project using the so-called main argument as a needed hint [instantiability test, any hole starting from the end]
+- identify the main predicate (`?P`), all other predicates [types of the elim's other branches] and all obligations, among the created evars [holes]
+  + the main predicate is `?P` from the return type of the eliminator `?P t1 .. tn` (needs to be of that shape)
+    * instantiate `?P` as a lambda such that the return type becomes `?P@{t1; ..; tn}`
+  + the obligations are the hypotheses which (1) return `?P@{u1; ..; un}`
+  + the other predicates are the predicates from the other branches that could have been taken, other obligations similar [not sure if and how to use]
+- Apply the `with_bindings`; potential conflict with definition of `?P` to be caught here
+- If the discriminator(s) / main argument(s) (exists and) is given, instantiate it; potential conflict with `with_bindings` to be caught here
 
 ### Main part
 
-- If given, unify the discriminee(s) with the discriminee evar(s) (be it inductive value or function application or anything)
-- (unsure) Check that the instance of `?P` in the eliminator return type has no remaining evars
-- Recognise the different arguments in the instance of the main predicate among the generalised hypotheses
-  + In the hypotheses and the goal, we want to recognise each instance argument as a pattern and replace it with the associated variable in the named context of `?P`.
-    This pattern recognition is done successively for each argument, in the given list of generalised hypotheses.
+Input: eliminator (see above), occurences matrix, in_list : list of (hyp or 'pat/constr as intro_var'), goal hyps and conclusion, is_dependent / eqn
 
-    There is a question to be had on how to direct this pattern recognition.
+- Check that the instance of `?P` in the eliminator return type has no remaining evars (only pre-existing as those stay allowed) [no evar from eliminator hole list]
 
-  + If the list of generalised hypotheses is not given and we are not `dependent`, infer it to be the list of all hypotheses where the above pattern recognition would find something
+- If dependent, prepend `refl : variable = instance element :> variable type` as `?e` in the in_list (no need for subterm matching)
+- If eqn:e, prepend `refl : variable = argument :> variable type` as `e` in the in_list for the main argument(s ?) (no need for subterm matching)
 
-  + If `dependent`, we generalise over `refl : pack variable = pack instance arguments :> instance telescope`
-    If the list of generalised hypotheses is not given, infer it to be [if induction, empty|if destruct, the instance arguments which are variables and everything that depends on it, but no pattern recognition]
 
-  + If `eqn:H`, find the argument which corresponds to the discriminee (error if doesn't exist or if > 1) and generalise over `refl : variable = argument :> variable type`.
-    If the discriminee is a variable, generalise as above [+ when destruct, warning "was generalised automatically as a variable"]
-    Else if `variable type` depends on some part of the instance, error "cannot generalise"
 
-    If the list of generalised hypotheses is not given, infer it to be the same as with `dependent`
+- Iteratively, over the in_list and then the conclusion:
+  + if `hyp`, then it shall be generalised and cleared from the regular context; no additional work to do since it's already the correct variable
+  + If `pat/constr as intro_var` (this can include `H as H'` to not forget a hypothesis but still generalise)
+    * if `pat`, we look for it in conclusion, listed hypotheses in reverse, remaining hypotheses in reverse until we find it (then do as for constr)
+    * when `constr`, we add it to the "to-match" list
 
-  + (ONLY IF 2) Mirror somewhat this to all predicates (How ?)
+  + Recognise the different arguments in the instance of the main predicate (+ to-match list)
+    * One occurence set per instance element
+    * Still, whole instance every time
+    * FO heuristic if no occurence set is given: if the type is `forall Γ, c args`, test args against *main* instance whole terms from the end until it fails
+    * For the rest (or whole term if no heuristic), find subterm for each instance element  and replace with asociated variable (using occurence sets)
+    * NB: The result is only well typed in the environment extended with local *defs*, not merely local abstractions (to be dealt with later)
 
-- Do the actual generalisation:
-    + Try clearing all generalised hypotheses, all variables which appear in the main argument and its indices (if any)
-    + Instantiate `?P := forall ?Γ, ?Goal`
-    + Instantiate `?Hi := fun (Γ : Γ) => ?Hi` (?? what do we do if 2)
-    + Instantiate `[whole term] := [whole term] @ Γ`
+  + Restoring typing: we are confronted to a problem where
+    Γ, vars := inst ⊢ hyp : hyptype : □, i.e. Γ ⊢ hyp : hyptype[vars := inst] : □
+    but we want Γ , vars : vartypes ⊢ hyp : hyptype' : □
+    * if dependent, we repair hyptype by adding transports of the equalities generated in the inst (ETT to ITT style), as best as we can (no introducing funext or UIP)
+    * if repair mode on, we repair by generalising the problematic subterms (and give a warning since this can and probably should be done explicitly ?)
+    * if repair mode off, try to give a good error message, specific to the situation (shouldn't be too hard) (give a specific message for eqn hyp when applicable)
 
-- If `dependent`, hook(?) to do [injection, discrimination, noconfusion] on added equalities
-- If evars disallowed, check whether all remaining evars are nondependent
-- return
 
+- Do the actual work:
+  + Try clearing all hypotheses in the list, all variables which appear in the main instance
+  + Instantiate `?P := forall ?Γ, ?Goal`
+  + Append Γ to intro pattern for Hi
+  + Instantiate `[whole term] @ Γ`
+
+- Post:
+  + Hook for generated equalities with dependent
+  + Apply intropatterns
+  + If evars disallowed, check whether all remaining evars are nondependent
 
 ## rest
 elim_ind is an induction principle, with its uniform parameters, predicates, some branches for obligations, non-uniform parameters and the proved predicate.

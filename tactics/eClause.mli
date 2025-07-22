@@ -64,7 +64,7 @@ val make_evar_clause : env -> evar_map -> ?len:int -> EConstr.types ->
 
 val progress_evar_clause : env -> evar_map -> clause -> econstr -> evar_map
 
-val find_progress_evar_clause : env -> (evar_map * hole list * 'a) list -> econstr -> evar_map * (hole list * 'a)
+val find_progress_evar_clause : env -> (evar_map * hole list * 'a) list -> econstr -> evar_map * int
 
 
 val solve_evar_clause : env -> evar_map -> bool -> clause -> EConstr.constr bindings ->

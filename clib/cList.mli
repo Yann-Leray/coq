@@ -231,6 +231,11 @@ val extract_first : ('a -> bool) -> 'a list -> 'a list * 'a
 (** Remove and return the first element satisfying a predicate,
     or raise [Not_found] *)
 
+val extract_nth : int -> 'a list -> 'a list * 'a
+(** Remove and return the nth element.
+    @raises Invalid_arg if the index is negative
+    @raises Not_found if the index is larger than the list *)
+
 val find_map_exn : ('a -> 'b option) -> 'a list -> 'b
 (** Like [find_map] but raises [Not_found] instead of returning [None]. *)
 
