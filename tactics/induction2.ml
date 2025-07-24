@@ -136,7 +136,7 @@ type elim_scheme = {
 }
 
 
-let eliminator_of_constr env sigma ?discr elimc with_bindings =
+let eliminator_of_constr env sigma ?(discr=[]) (elimc, with_bindings) =
 
   let elimt = Retyping.get_type_of env sigma elimc in
 
@@ -160,7 +160,7 @@ let eliminator_of_constr env sigma ?discr elimc with_bindings =
   let ccls = get_ccls sigma elimc elimt in
 
   let sigma, elimc, elimt, holes, main_pred, main_inst, other_preds =
-    match ccls, discr with
+    match ccls, List.nth_opt discr 0 with
     | [sigma, holes, (elimc, elimt, evk, inst)], _ ->
       sigma, elimc, elimt, holes, evk, inst, []
     | [], _ -> assert false
@@ -173,7 +173,7 @@ let eliminator_of_constr env sigma ?discr elimc with_bindings =
 
   let clause = EClause.{ cl_holes = holes; cl_concl = elimt } in
   let sigma = EClause.solve_evar_clause env sigma true clause with_bindings in
-  let sigma = Option.fold_left (fun sigma -> EClause.progress_evar_clause env sigma clause) sigma discr in
+  let sigma = List.fold_right (fun c sigma -> EClause.progress_evar_clause env sigma clause c) discr sigma in
 
   let test_head_evar sigma evks c =
     let _, ty = decompose_prod_decls sigma c in
@@ -348,7 +348,7 @@ let guard_no_unifiable =
     Proofview.tclZERO ~info Logic.(RefinerError (env, sigma, UnresolvedBindings l))
 
 
-let induction_tac ~with_evars ~inhyps constr (elim, with_binding) =
+let induction_tac ~with_evars ~inhyps lc elim =
   Proofview.Goal.enter begin fun gl ->
   let env = Proofview.Goal.env gl in
   let sigma = Proofview.Goal.sigma gl in
@@ -356,12 +356,24 @@ let induction_tac ~with_evars ~inhyps constr (elim, with_binding) =
   let ccl = Proofview.Goal.concl gl in
   let state = Proofview.Goal.state gl in
 
-  let sigma, elim = eliminator_of_constr env sigma ~discr:constr elim with_binding in
+  let sigma, elim = match elim with
+  | Some elim -> sigma, elim
+  | None ->
+    let constr = match lc with constr :: _ -> constr | [] -> CErrors.user_err Pp.(str"cannot guess eliminator with no argument") in
+    let ty = Retyping.get_type_of env sigma constr in
+    let (ind, _), _ = find_hnf_rectype env sigma ty in
+    let s = Tacticals.elimination_sort_of_goal gl in
+    let gr = Indrec.lookup_eliminator env ind s in
+    let sigma, elimc = Evd.fresh_global env sigma gr in
+    sigma, (elimc, Tactypes.NoBindings)
+  in
+
+  let sigma, elim = eliminator_of_constr env sigma ~discr:lc elim in
 
   let inhyps = match inhyps with
     | InList _ -> inhyps
     | AllMatchingBut set ->
-      let set = Option.fold_right Id.Set.add (destVar_opt sigma constr) set in
+      let set = List.fold_right Id.Set.add (List.filter_map (destVar_opt sigma) lc) set in
       AllMatchingBut set
   in
 
@@ -377,7 +389,7 @@ let induction_tac ~with_evars ~inhyps constr (elim, with_binding) =
   Tacticals.tclTHENLIST [
     Proofview.Unsafe.tclEVARS sigma;
     Proofview.Unsafe.tclNEWGOALS (CList.map (fun evk -> Proofview.goal_with_state evk state) gls);
-    Tacticals.tclTHENLIST (List.filter_map (fun c -> destVar_opt sigma c |> Option.map expand_hyp) (List.map snd elim.main_inst @ [constr]));
+    Tacticals.tclTHENLIST (List.filter_map (fun c -> destVar_opt sigma c |> Option.map expand_hyp) (List.map snd elim.main_inst @ lc));
     Tactics.reduce_after_refine;
     if with_evars then Proofview.shelve_unifiable else guard_no_unifiable
   ]
