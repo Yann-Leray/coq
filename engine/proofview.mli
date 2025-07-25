@@ -295,6 +295,11 @@ val tclFOCUSSELECTORLIST : ?nosuchgoal:'a tactic -> goal_range_selector list -> 
     number. Fails with [nosuchgoal], by default raising [NoSuchGoals 1]. *)
 val tclFOCUSID : ?nosuchgoal:'a tactic -> Names.Id.t -> 'a tactic -> 'a tactic
 
+(** [tclFOCUSEV x t] applies [t] on a (single) focused goal like
+    {!tclFOCUS}. The goal is found by its evar rather than its
+    number. Fails with [nosuchgoal], by default raising [NoSuchGoals 1]. *)
+val tclFOCUSEV : ?nosuchgoal:'a tactic -> Evar.t -> 'a tactic -> 'a tactic
+
 (** [tclTRYFOCUS i j t] behaves like {!tclFOCUS}, except that if the
     specified range doesn't correspond to existing goals, behaves like
     [tclUNIT ()] instead of failing. *)

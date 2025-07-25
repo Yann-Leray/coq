@@ -116,6 +116,9 @@ val done_cond : ?loose_end:bool -> 'a focus_kind -> 'a focus_condition
    a need for it? *)
 val focus : 'a focus_condition -> 'a -> int -> t -> t
 
+(* focus on goal with evar ev *)
+val focus_ev : 'a focus_condition -> 'a -> Evar.t -> t -> t
+
 (* focus on goal named id *)
 val focus_id : 'a focus_condition -> 'a -> Names.Id.t -> t -> t
 

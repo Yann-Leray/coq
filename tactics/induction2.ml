@@ -19,7 +19,8 @@ open Tacred
 open Evarutil
 open Locus
 
-
+let (let*) = Proofview.tclBIND
+let (let@) = (@@)
 
 (* TODO: Factor out (copy of tactics.ml) *)
 
@@ -311,10 +312,32 @@ let trunk env sigma elim inhyps hyps ccl =
   sigma, mkApp (elim.elimc, Context.Named.instance mkVar hyps')
 
 
-
-
 let destVar_opt sigma c = match destVar sigma c with v -> Some v | exception Constr.DestKO -> None
 
+let induction_gen env sigma inhyps hyps lc elim ccl =
+  let sigma, elim = match elim with
+  | Some elim -> sigma, elim
+  | None ->
+    let constr = match lc with constr :: _ -> constr | [] -> CErrors.user_err Pp.(str"cannot guess eliminator with no argument") in
+    let ty = Retyping.get_type_of env sigma constr in
+    let (ind, _), _ = find_hnf_rectype env sigma ty in
+    let s = Retyping.get_sort_quality_of env sigma ccl in
+    let gr = Indrec.lookup_eliminator env ind s in
+    let sigma, elimc = Evd.fresh_global env sigma gr in
+    sigma, (elimc, Tactypes.NoBindings)
+  in
+
+  let sigma, elim = eliminator_of_constr env sigma ~discr:lc elim in
+
+  let inhyps = match inhyps with
+    | InList _ -> inhyps
+    | AllMatchingBut set ->
+      let set = List.fold_right Id.Set.add (List.filter_map (destVar_opt sigma) lc) set in
+      AllMatchingBut set
+  in
+
+  let sigma, res = trunk env sigma elim inhyps hyps ccl in
+  sigma, res, elim
 
 let warn_cannot_remove_as_expected =
   CWarnings.create ~name:"cannot-remove-as-expected2" ~category:CWarnings.CoreCategories.tactics
@@ -338,59 +361,32 @@ let expand_hyp id =
 
 
 let guard_no_unifiable =
-  let open Proofview.Notations in
-  Proofview.guard_no_unifiable >>= function
+  let* unif = Proofview.guard_no_unifiable in
+  match unif with
   | None -> Proofview.tclUNIT ()
   | Some l ->
-    Proofview.tclENV     >>= function env ->
-    Proofview.tclEVARMAP >>= function sigma ->
+    let* env = Proofview.tclENV in
+    let* sigma = Proofview.tclEVARMAP in
     let info = Exninfo.reify () in
     Proofview.tclZERO ~info Logic.(RefinerError (env, sigma, UnresolvedBindings l))
 
 
-let induction_tac ~with_evars ~inhyps lc elim =
-  Proofview.Goal.enter begin fun gl ->
+let induction_tac ~with_evars ~inhyps lc intropatterns elim =
+  let@ gl = Proofview.Goal.enter in
   let env = Proofview.Goal.env gl in
   let sigma = Proofview.Goal.sigma gl in
   let hyps = Proofview.Goal.hyps gl in
   let ccl = Proofview.Goal.concl gl in
-  let state = Proofview.Goal.state gl in
 
-  let sigma, elim = match elim with
-  | Some elim -> sigma, elim
-  | None ->
-    let constr = match lc with constr :: _ -> constr | [] -> CErrors.user_err Pp.(str"cannot guess eliminator with no argument") in
-    let ty = Retyping.get_type_of env sigma constr in
-    let (ind, _), _ = find_hnf_rectype env sigma ty in
-    let s = Tacticals.elimination_sort_of_goal gl in
-    let gr = Indrec.lookup_eliminator env ind s in
-    let sigma, elimc = Evd.fresh_global env sigma gr in
-    sigma, (elimc, Tactypes.NoBindings)
+  let gen sigma = induction_gen env sigma inhyps hyps lc elim ccl in
+
+  let* elim = Refine.refine_with_payload ~typecheck:false gen in
+
+  let* () = Tacticals.tclTHENLIST
+    (List.filter_map (fun c -> destVar_opt sigma c |> Option.map expand_hyp) (List.map snd elim.main_inst @ lc))
   in
+  let* () = Tactics.reduce_after_refine in
 
-  let sigma, elim = eliminator_of_constr env sigma ~discr:lc elim in
+  (* Apply intropatterns *)
 
-  let inhyps = match inhyps with
-    | InList _ -> inhyps
-    | AllMatchingBut set ->
-      let set = List.fold_right Id.Set.add (List.filter_map (destVar_opt sigma) lc) set in
-      AllMatchingBut set
-  in
-
-  let sigma, res = trunk env sigma elim inhyps hyps ccl in
-
-  let goal = Proofview.Goal.goal gl in
-  let sigma = Evd.define goal res sigma in
-
-  let future_goals, sigma = Evd.pop_future_goals sigma in
-  let gls = List.rev (Evd.FutureGoals.comb future_goals) in
-  let sigma = Evd.push_future_goals sigma in
-
-  Tacticals.tclTHENLIST [
-    Proofview.Unsafe.tclEVARS sigma;
-    Proofview.Unsafe.tclNEWGOALS (CList.map (fun evk -> Proofview.goal_with_state evk state) gls);
-    Tacticals.tclTHENLIST (List.filter_map (fun c -> destVar_opt sigma c |> Option.map expand_hyp) (List.map snd elim.main_inst @ lc));
-    Tactics.reduce_after_refine;
-    if with_evars then Proofview.shelve_unifiable else guard_no_unifiable
-  ]
-  end
+  if with_evars then Proofview.shelve_unifiable else guard_no_unifiable

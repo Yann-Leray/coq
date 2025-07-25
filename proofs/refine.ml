@@ -114,6 +114,12 @@ let lift c =
 
 let make_refine_enter ~typecheck f gl = generic_refine ~typecheck (lift f) gl
 
+let refine_with_payload ~typecheck f =
+  let f evd =
+    let (evd, c, payload) = f evd in (evd, (payload, c, None))
+  in
+  Proofview.Goal.enter_one ~__LOC__ (make_refine_enter ~typecheck f)
+
 let refine ~typecheck f =
   let f evd =
     let (evd,c) = f evd in (evd,((), c, None))

@@ -180,14 +180,20 @@ let focus i j sp =
   let (new_comb, (left, right)) = focus_sublist i j sp.comb in
   ( { sp with comb = new_comb } , (left, right) )
 
+(* Returns [Some n] if [n] is the index of evar [ev] in the
+   list of currently focused goals, or [None] if [ev] is shelved.
+   Raises [Not_found] if the evar does not exist. *)
+let find_evar_in_pv ev pv =
+  let comb = CList.map drop_state pv.comb in
+  try Some (CList.index Evar.equal ev comb)
+  with Not_found -> None
+
 (* Returns [ev, Some n] if [n] is the index of evar [ev] with name [id] in the
    list of currently focused goals, or [ev, None] if [ev] is shelved.
    Raises [Not_found] if the evar does not exist. *)
-let find_evar_in_pv id pv =
+let find_evar_id_in_pv id pv =
   let ev = Evd.evar_key id pv.solution in
-  let comb = CList.map drop_state pv.comb in
-  try ev, Some (CList.index Evar.equal ev comb)
-  with Not_found -> ev, None
+  ev, find_evar_in_pv ev pv
 
 (** Unfocuses a proofview with respect to a context. *)
 let unfocus (left, right) sp =
@@ -450,7 +456,7 @@ let tclFOCUSSELECTORLIST ?(nosuchgoal=tclZERO (NoSuchGoals 0)) l t =
           | NthSelector n -> Left (n, n)
           | RangeSelector r -> Left r
           | IdSelector id ->
-             match find_evar_in_pv id initial with
+             match find_evar_id_in_pv id initial with
              | ev, Some n -> Left (n, n) (* goal is focused with index n *)
              | ev, None -> Right ev (* goal is shelved *)) l in
     match CList.is_empty ranges, CList.is_empty shelved_evars with
@@ -465,7 +471,7 @@ let tclFOCUSID ?(nosuchgoal=tclZERO (NoSuchGoals 1)) id t =
   let open Proof in
   Pv.get >>= fun initial ->
   try
-    match find_evar_in_pv id initial with
+    match find_evar_id_in_pv id initial with
     | ev, Some n ->
       (* Goal is under focus with index n *)
       let (focused,context) = focus n n initial in
@@ -474,6 +480,24 @@ let tclFOCUSID ?(nosuchgoal=tclZERO (NoSuchGoals 1)) id t =
       Pv.modify (fun next -> unfocus context next) >>
         return result
     | ev, None ->
+       (* Goal is shelved. *)
+       tclFOCUSSHELF ~nosuchgoal [ev] t
+  with Not_found -> nosuchgoal
+
+(** Like {!tclFOCUS} but selects a single goal by evar. *)
+let tclFOCUSEV ?(nosuchgoal=tclZERO (NoSuchGoals 1)) ev t =
+  let open Proof in
+  Pv.get >>= fun initial ->
+  try
+    match find_evar_in_pv ev initial with
+    | Some n ->
+      (* Goal is under focus with index n *)
+      let (focused,context) = focus n n initial in
+      Pv.set focused >>
+        t >>= fun result ->
+      Pv.modify (fun next -> unfocus context next) >>
+        return result
+    | None ->
        (* Goal is shelved. *)
        tclFOCUSSHELF ~nosuchgoal [ev] t
   with Not_found -> nosuchgoal

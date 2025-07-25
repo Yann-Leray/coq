@@ -192,33 +192,36 @@ let focus cond inf i pr =
   try _focus cond inf i i pr
   with CList.IndexOutOfRange -> raise (NoSuchGoals (i,i))
 
+(* Focus on the goal with evar ev *)
+let focus_ev cond inf ev pr =
+  let (focused_goals, evar_map) = Proofview.proofview pr.proofview in
+  begin match CList.index_opt Evar.equal ev focused_goals with
+  | Some i ->
+    (* goal is already under focus *)
+    _focus cond inf i i pr
+  | None ->
+    if Evd.mem_shelf ev evar_map then
+      (* goal is on the shelf, put it in focus *)
+      let proofview = Proofview.unshelve [ev] pr.proofview in
+      let pr = { pr with proofview } in
+      let (focused_goals, _) = Proofview.proofview pr.proofview in
+      let i =
+        (* Now we know that this will succeed *)
+        try CList.index Evar.equal ev focused_goals
+        with Not_found -> assert false
+      in
+      _focus cond inf i i pr
+    else
+      raise CannotUnfocusThisWay
+  end
+
 (* Focus on the goal named id *)
 let focus_id cond inf id pr =
-  let (focused_goals, evar_map) = Proofview.proofview pr.proofview in
-  begin match try Some (Evd.evar_key id evar_map) with Not_found -> None with
-  | Some ev ->
-     begin match CList.index_opt Evar.equal ev focused_goals with
-     | Some i ->
-        (* goal is already under focus *)
-        _focus cond inf i i pr
-     | None ->
-        if Evd.mem_shelf ev evar_map then
-          (* goal is on the shelf, put it in focus *)
-          let proofview = Proofview.unshelve [ev] pr.proofview in
-          let pr = { pr with proofview } in
-          let (focused_goals, _) = Proofview.proofview pr.proofview in
-          let i =
-            (* Now we know that this will succeed *)
-            try CList.index Evar.equal ev focused_goals
-            with Not_found -> assert false
-          in
-          _focus cond inf i i pr
-        else
-          raise CannotUnfocusThisWay
-     end
-  | None ->
-     raise (NoSuchGoal (Some id))
-  end
+  let evar_map = Proofview.return pr.proofview in
+  match Evd.evar_key id evar_map with
+  | ev -> focus_ev cond inf ev pr
+  | exception Not_found ->
+    raise (NoSuchGoal (Some id))
 
 let rec unfocus kind pr () =
   let AnyFocusCond cond = cond_of_focus pr in

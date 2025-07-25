@@ -32,6 +32,9 @@ val refine_with_principal : typecheck:bool -> (Evd.evar_map -> Evd.evar_map * EC
 (** Like [refine], but if the [Evar.t option] is [Some ev] then [ev]
     inherits properties (the name) of the goal. *)
 
+val refine_with_payload : typecheck:bool -> (Evd.evar_map -> Evd.evar_map * EConstr.t * 'a) -> 'a tactic
+(** Like [refine], but propagates a payload. Only works when a single goal is focused *)
+
 val generic_refine : typecheck:bool -> ('a * EConstr.t * Evar.t option) tactic ->
   Proofview.Goal.t -> 'a tactic
 (** The general version of refine. *)
