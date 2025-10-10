@@ -116,7 +116,7 @@ module Quality : sig
   type 'q pattern =
     PQVar of 'q | PQConstant of constant
 
-  val pattern_match : (t -> t -> bool) -> int option pattern -> t -> ('t, t, 'u) Partial_subst.t -> ('t, t, 'u) Partial_subst.t option
+  val pattern_match : int option pattern -> t -> ('t, t, 'u) Partial_subst.t -> ('t, t, 'u) Partial_subst.t option
 end
 
 module QConstraint : sig
@@ -216,6 +216,6 @@ val raw_pr : t -> Pp.t
 type ('q, 'u) pattern =
   | PSProp | PSSProp | PSSet | PSType of 'u | PSQSort of 'q * 'u
 
-val pattern_match : (Quality.t -> Quality.t -> bool) * (Univ.Level.t -> Univ.Level.t -> bool) -> (int option, int option) pattern -> t -> ('t, Quality.t, Univ.Level.t) Partial_subst.t -> ('t, Quality.t, Univ.Level.t) Partial_subst.t option
+val pattern_match : (int option, int option) pattern -> t -> ('t, Quality.t, Univ.Level.t) Partial_subst.t -> ('t, Quality.t, Univ.Level.t) Partial_subst.t option
 
 val relevance_match : int option -> relevance -> ('t, Quality.t, 'u) Partial_subst.t -> ('t, Quality.t, 'u) Partial_subst.t

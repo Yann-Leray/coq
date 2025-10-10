@@ -129,31 +129,29 @@ let interp_rule (eqs, pattern, rhs) =
   let evd = Evd.freeze_sort_variables evd in
   let evd = Evd.fix_undefined_variables evd in
 
-  (* 3. Read right hand side *)
-  let rhs = Constrintern.(intern_gen WithoutTypeConstraint env evd rhs) in
   let flags = Pretyping.no_classes_no_fail_inference_flags in
-  let evd', rhs =
-    try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType (EConstr.of_constr @@ Environ.j_type j_pat)) rhs
-    with Pretype_errors.PretypeError (env', evd', e) ->
-      warn_rewrite_rules_break_SR ~loc:rhs_loc
-        Pp.(surround (str "the replacement term doesn't have the type of the pattern") ++ str "." ++ fnl () ++ Himsg.explain_pretype_error env' evd' e);
-      Pretyping.understand_tcc ~flags env evd rhs
-  in
-
-  let evd', eqs = List.fold_left_map (fun evd (a, b) ->
-    let a_loc = a.CAst.loc in
-    let b_loc = b.CAst.loc in
+  let evd, eqs = List.fold_left_map (fun evd (a, b) ->
     let a = Constrintern.(intern_gen WithoutTypeConstraint env evd a) in
     let evd, a, ty = Pretyping.understand_tcc_ty ~flags env evd a in
     let b = Constrintern.(intern_gen WithoutTypeConstraint env evd b) in
     let evd, b =
       try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType ty) b
       with Pretype_errors.PretypeError (env', evd', e) ->
-      warn_rewrite_rules_break_SR ~loc:b_loc
+      warn_rewrite_rules_break_SR ~loc:b.CAst.loc
         Pp.(surround (str "the equation rhs term doesn't have the type of its lhs") ++ str "." ++ fnl () ++ Himsg.explain_pretype_error env' evd' e);
         Pretyping.understand_tcc ~flags env evd b
     in
-    evd, (a, a_loc, b, b_loc)) evd' eqs
+    evd, (a, b)) evd eqs
+  in
+
+  (* 3. Read right hand side *)
+  let rhs = Constrintern.(intern_gen WithoutTypeConstraint env evd rhs) in
+  let evd, rhs =
+    try Pretyping.understand_tcc ~flags env evd ~expected_type:(OfType (EConstr.of_constr @@ Environ.j_type j_pat)) rhs
+    with Pretype_errors.PretypeError (env', evd', e) ->
+      warn_rewrite_rules_break_SR ~loc:rhs_loc
+        Pp.(surround (str "the replacement term doesn't have the type of the pattern") ++ str "." ++ fnl () ++ Himsg.explain_pretype_error env' evd' e);
+      Pretyping.understand_tcc ~flags env evd rhs
   in
 
   let checker = let open UnivProblem in function
@@ -177,10 +175,12 @@ let interp_rule (eqs, pattern, rhs) =
   (* The pattern constraints must imply those of the rhs *)
   let () = UState.check_uctx_impl ~fail uctx_pre (Evd.ustate evd) in
 
+  let f c = EConstr.Unsafe.to_constr (Evarutil.nf_evar evd c) in
+  let eqs = List.map (fun (a, b) -> f a, f b) eqs in
   let rhs = EConstr.Unsafe.to_constr (Evarutil.nf_evar evd rhs) in
   (* Remaining evars are either substituted or caught by the [translate_pattern] function *)
 
-  let rule = { pattern; replacement = rhs; info = Info rr_info } in
+  let rule = { pattern; replacement = rhs; equations = eqs; info = Info rr_info } in
 
   let machine =
     match Rewrite_rules_ops.translate_rewrite_rule env rule with

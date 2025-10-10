@@ -563,17 +563,13 @@ let apply_branch env sigma (ind, i) args (ci, u, pms, iv, r, lf) =
 
 exception PatternFailure
 
-let qconv _info q q' = Sorts.Quality.equal q q'
-let uconv sigma u u' = UGraph.check_eq_level (Evd.universes sigma) u u'
-let quconv info = (qconv info, uconv info)
-
 let match_einstance sigma pu u psubst =
-  match UVars.Instance.pattern_match (quconv sigma) pu (EInstance.kind sigma u) psubst with
+  match UVars.Instance.pattern_match pu (EInstance.kind sigma u) psubst with
   | Some psubst -> psubst
   | None -> raise PatternFailure
 
 let match_sort sigma ps s psubst =
-  match Sorts.pattern_match (quconv sigma) ps (ESorts.kind sigma s) psubst with
+  match Sorts.pattern_match ps (ESorts.kind sigma s) psubst with
   | Some psubst -> psubst
   | None -> raise PatternFailure
 
@@ -678,7 +674,7 @@ let rec apply_rules whrec env sigma u r stk =
   let open Declarations in
   match r with
   | [] -> raise PatternFailure
-  | { lhs_pat = (pu, elims); nvars; equalities; rhs } :: rs ->
+  | { lhs_pat = (pu, elims); nvars; equations; rhs } :: rs ->
     try
       let psubst = Partial_subst.make nvars in
       let psubst = match_einstance sigma pu u psubst in
@@ -687,8 +683,8 @@ let rec apply_rules whrec env sigma u r stk =
       let subst = Array.to_list subst in
       let usubst = EConstr.EInstance.make @@ UVars.Instance.of_array (qsubst, usubst) in
       let () =
-        let fequalities = List.map (map_pair (fun t -> substl subst @@ subst_instance_constr usubst @@ EConstr.of_constr @@ t)) equalities in
-        let eq_istrue = List.for_all (fun (a, b) -> Reductionops.is_conv env sigma a b) fequalities in
+        let fequations = List.map (map_pair (fun t -> substl subst @@ subst_instance_constr usubst @@ EConstr.of_constr @@ t)) equations in
+        let eq_istrue = List.for_all (fun (a, b) -> Reductionops.is_conv env sigma a b) fequations in
         if eq_istrue then
           ()
         else

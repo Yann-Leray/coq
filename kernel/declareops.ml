@@ -438,10 +438,16 @@ let subst_machine_pattern subst p =
   in
   on_pat p
 
+let pair_smart_map f (a, b as p) =
+  let a' = f a in
+  let b' = f b in
+  if a == a' && b == b' then p else (a', b')
+
 let subst_rewrite_rules subst ({ rewrules_rules; rewrules_machine } as rules) =
   let body' = List.Smart.map (fun rule ->
       let pattern' = subst_pattern subst rule.pattern in
       let replacement' = subst_mps subst rule.replacement in
+      let equations' = List.Smart.map (pair_smart_map (subst_mps subst)) rule.equations in
       let rr_info' = subst_rr_info subst rule.info in
       if
         pattern' == rule.pattern &&
@@ -449,19 +455,20 @@ let subst_rewrite_rules subst ({ rewrules_rules; rewrules_machine } as rules) =
         rr_info' == rule.info then
           rule
       else
-        { pattern=pattern'; replacement=replacement'; info=rr_info'})
+        { pattern=pattern'; replacement=replacement'; equations = equations'; info=rr_info'})
       rewrules_rules
   in
-  let machine' = List.Smart.map (fun (cst, { nvars; lhs_pat = (u, e); rhs } as rule) ->
+  let machine' = List.Smart.map (fun (cst, { nvars; lhs_pat = (u, e); equations; rhs } as rule) ->
     let lhs_pat' = subst_machine_pattern subst (PHSymbol (cst, u), e) in
     let cst', u', e' = match lhs_pat' with
     | PHSymbol (cst', u'), e' -> cst', u', e'
     | _ -> assert false
     in
     let rhs' = subst_mps subst rhs in
-    if cst == cst' && u == u' && e == e' && rhs == rhs' then
+    let equations' = List.Smart.map (pair_smart_map (subst_mps subst)) equations in
+    if cst == cst' && u == u' && e == e' && equations == equations' && rhs == rhs' then
       rule
-    else (cst', { nvars; lhs_pat = (u', e'); rhs = rhs' })
+    else (cst', { nvars; lhs_pat = (u', e'); rhs = rhs'; equations = equations' })
     ) rewrules_machine
   in
   if rewrules_rules == body' && rewrules_machine == machine' then rules else

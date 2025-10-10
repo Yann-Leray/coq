@@ -1877,23 +1877,28 @@ let test_level env nvarus alg_vars ~sort lvl =
 
 
 
-let translate_rewrite_rule env { pattern; replacement; info=Info info } =
+let translate_rewrite_rule env { pattern; replacement; equations; info=Info info } =
   let empty_state = ((1, Evar.Map.empty), (0, [], QVar.Map.empty), (0, [], Level.Map.empty)) in
   let state, lhs_pat = translate_pattern empty_state pattern in
   let (nvars, evmap), (nvarqs, rel_vars, qvmap), (nvarus, alg_vars, uvmap) = state in
   let rel_vars = Array.rev_of_list rel_vars and alg_vars = Array.rev_of_list alg_vars in
-  let rhs = evar_subst evmap info.evar_map 0 replacement in
   let usubst = make_usubst (qvmap, uvmap) in
-  let rhs = Vars.subst_univs_level_constr usubst rhs in
-  let () =
-    Vars.test_sort_and_universes (test_qvar env nvarqs rel_vars) (test_level env nvarus alg_vars) rhs
+  let translate_constr c =
+    let c = evar_subst evmap info.evar_map 0 c in
+    let c = Vars.subst_univs_level_constr usubst c in
+    let () =
+      Vars.test_sort_and_universes (test_qvar env nvarqs rel_vars) (test_level env nvarus alg_vars) c
+    in
+    c
   in
+  let rhs = translate_constr replacement in
+  let equations = List.map (fun (a, b) -> translate_constr a, translate_constr b) equations in
   let symb, head_umask, elims = match lhs_pat with
     | (PHSymbol (symb, mask), elims) -> symb, mask, elims
     | _ -> raise (PatternTranslationError NoHeadSymbol)
   in
 
-  symb, { nvars = (nvars-1, nvarqs, nvarus); lhs_pat = (head_umask, elims); rhs }
+  symb, { nvars = (nvars-1, nvarqs, nvarus); lhs_pat = (head_umask, elims); equations; rhs }
 
 let rec head_symbol = function
   | PSymbol (cst, _) -> cst
