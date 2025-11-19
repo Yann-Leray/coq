@@ -128,8 +128,8 @@ type elim_scheme = {
   main_inst : (variable * constr) list; (* a1 .. an t1 .. tn, but no section variable *)
   other_preds : Evar.t list;
 
-  main_branches : EClause.hole list; (* Type is ∀Γ, ?P u1 .. un *)
-  other_branches : EClause.hole list; (* Type is ∀Δ, ?Q v1 .. vp *)
+  main_branches : (rel_context * EClause.hole) list; (* Type is ∀Γ, ?P u1 .. un *)
+  other_branches : (rel_context * EClause.hole) list; (* Type is ∀Δ, ?Q v1 .. vp *)
   other_holes : EClause.hole list;
 
   all_holes : EClause.hole list;
@@ -149,7 +149,8 @@ let eliminator_of_constr env sigma ?(discr=[]) (elimc, with_bindings) =
     | Evar ev ->
       let sigma, ev = Evardefine.evar_absorb_arguments env sigma ev (Array.to_list ccl_args) in
       let inst = Evarutil.make_evar_instance sigma ev in
-      [sigma, cl.cl_holes, (elimc, elimt, fst ev, inst)]
+      let holes = List.map (fun hole -> EClause.{ hole with hole_type = nf_beta env sigma hole.hole_type }) cl.cl_holes in
+      [sigma, holes, (elimc, cl.cl_concl, fst ev, inst)]
     | _ ->
       if Hipattern.is_tuple env sigma cl.cl_concl then
         let sigma, projtys = make_projections env sigma elimc in
@@ -176,13 +177,13 @@ let eliminator_of_constr env sigma ?(discr=[]) (elimc, with_bindings) =
   let sigma = EClause.solve_evar_clause env sigma true clause with_bindings in
   let sigma = List.fold_right (fun c sigma -> EClause.progress_evar_clause env sigma clause c) discr sigma in
 
-  let test_head_evar sigma evks c =
-    let _, ty = decompose_prod_decls sigma c in
+  let test_head_evar sigma evks hole =
+    let sign, ty = decompose_prod_decls sigma hole.EClause.hole_type in
     let head, _ = decompose_app sigma ty in
-    match EConstr.kind sigma head with Evar (evk, _) -> Evar.Set.mem evk evks | _ -> false
+    match EConstr.kind sigma head with Evar (evk, _) when Evar.Set.mem evk evks -> Either.Left (sign, hole) | _ -> Either.Right hole
   in
-  let main_branches, other_holes = List.partition (fun hole -> test_head_evar sigma (Evar.Set.singleton main_pred) hole.EClause.hole_type) holes in
-  let other_branches, other_holes = List.partition (fun hole -> test_head_evar sigma (Evar.Set.of_list other_preds) hole.EClause.hole_type) other_holes in
+  let main_branches, other_holes = List.partition_map (fun hole -> test_head_evar sigma (Evar.Set.singleton main_pred) hole) holes in
+  let other_branches, other_holes = List.partition_map (fun hole -> test_head_evar sigma (Evar.Set.of_list other_preds) hole) other_holes in
 
   sigma, { elimc; elimt = Retyping.get_type_of env sigma elimc; main_inst; main_pred; other_preds; main_branches; other_branches; other_holes; all_holes = holes }
 
@@ -278,7 +279,7 @@ let trunk env sigma elim inhyps hyps ccl =
   (* generalize_list can contain some inst patterns to match (become hypotheses instead of in the inst proper) *)
   (* retypecheck and somehow generalize over erroneous subterms *)
 
-  let env' = Evd.evar_filtered_env (Global.env ()) (Evd.find_undefined sigma elim.main_pred) in
+  let env' = Evd.evar_filtered_env env (Evd.find_undefined sigma elim.main_pred) in
 
   let sigma, hyps' =
     let sigma = Context.Named.fold_inside ~init:sigma
@@ -308,8 +309,10 @@ let trunk env sigma elim inhyps hyps ccl =
 
   let pred_value = it_mkNamedProd_or_LetIn sigma ccl' hyps' in
   let sigma = Evd.define elim.main_pred pred_value sigma in
+  let generalised_variables = Context.Named.instance (fun x -> x) hyps' in
 
-  sigma, mkApp (elim.elimc, Context.Named.instance mkVar hyps')
+  (* Check apptyped *)
+  sigma, mkApp (elim.elimc, Context.Named.instance mkVar hyps'), generalised_variables
 
 
 let destVar_opt sigma c = match destVar sigma c with v -> Some v | exception Constr.DestKO -> None
@@ -336,8 +339,8 @@ let induction_gen env sigma inhyps hyps lc elim ccl =
       AllMatchingBut set
   in
 
-  let sigma, res = trunk env sigma elim inhyps hyps ccl in
-  sigma, res, elim
+  let sigma, res, var_list = trunk env sigma elim inhyps hyps ccl in
+  sigma, res, (elim, var_list)
 
 let warn_cannot_remove_as_expected =
   CWarnings.create ~name:"cannot-remove-as-expected2" ~category:CWarnings.CoreCategories.tactics
@@ -354,11 +357,6 @@ let clear_for_destruct ids =
      | ClearDependencyError (id,err,inglobal),_ -> warn_cannot_remove_as_expected (id,inglobal); Proofview.tclUNIT ()
      | e -> Exninfo.iraise e)
 
-(* Either unfold and clear if defined or simply clear if not a definition *)
-let expand_hyp id =
-  let open Proofview.Notations in
-  Tacticals.tclTRY (Tactics.unfold_body id) <*> clear_for_destruct [id]
-
 
 let guard_no_unifiable =
   let* unif = Proofview.guard_no_unifiable in
@@ -371,22 +369,101 @@ let guard_no_unifiable =
     Proofview.tclZERO ~info Logic.(RefinerError (env, sigma, UnresolvedBindings l))
 
 
+let cast_or_pattern ?loc nv l =
+  (* 1- The syntax does not distinguish between "[ ]" for one clause with no
+     names and "[ ]" for no clause at all *)
+  (* 2- More generally, we admit "[ ]" for any disjunctive pattern of
+     arbitrary length *)
+  let open Tactypes in
+  match l with
+  | None
+  | Some CAst.{ v = IntroOrPattern [[]]; _ } -> List.make nv []
+  | Some CAst.{ v = IntroAndPattern p; loc } ->
+    if not (Int.equal nv 1) then
+      CErrors.user_err ?loc Pp.(strbrk "Expects a disjunctive pattern with " ++ int nv ++ str " branches.");
+    [p]
+  | Some CAst.{ v = IntroOrPattern l; _ } -> l
+
+let complete_or_and_intro_pattern holes pats =
+  let pats = cast_or_pattern (List.length holes) pats in
+  let pats = List.map2
+    (fun (sign, _) pats ->
+      let n = List.length pats in
+      let n' = List.length sign in
+      if n > n' then CErrors.user_err Pp.(strbrk "Expects a conjunctive pattern with " ++ int n' ++ str (String.plural n' " pattern") ++ str".");
+      if n = n' then pats else
+        pats @ List.make (n' - n) (CAst.make (Tactypes.IntroNaming IntroAnonymous))
+      )
+    holes pats
+  in
+  pats
+
+
 let induction_tac ~with_evars ~inhyps lc intropatterns elim =
   let@ gl = Proofview.Goal.enter in
   let env = Proofview.Goal.env gl in
-  let sigma = Proofview.Goal.sigma gl in
   let hyps = Proofview.Goal.hyps gl in
   let ccl = Proofview.Goal.concl gl in
 
   let gen sigma = induction_gen env sigma inhyps hyps lc elim ccl in
 
-  let* elim = Refine.refine_with_payload ~typecheck:false gen in
+  let* elim, var_list = Refine.refine_with_payload ~typecheck:false gen in
 
-  let* () = Tacticals.tclTHENLIST
-    (List.filter_map (fun c -> destVar_opt sigma c |> Option.map expand_hyp) (List.map snd elim.main_inst @ lc))
-  in
+  let* sigma = Proofview.tclEVARMAP in
+
+  let* () = clear_for_destruct (List.filter_map (destVar_opt sigma) (List.map snd elim.main_inst @ lc) @ Array.to_list var_list) in
   let* () = Tactics.reduce_after_refine in
 
-  (* Apply intropatterns *)
+  let* sigma = Proofview.tclEVARMAP in
+  let intropatterns = complete_or_and_intro_pattern elim.main_branches intropatterns in
+  let intropatterns = List.map (fun l -> l @ Array.map_to_list (fun v -> CAst.make (Tactypes.IntroNaming (IntroIdentifier v))) var_list) intropatterns in
+
+  let main_holes = List.map (fun (_, hole) -> hole.EClause.hole_evar_key |> Evarutil.advance sigma |> Option.get) elim.main_branches in
+
+  let* () = Tacticals.tclTHENLIST
+    (List.map2 (fun evk pat -> Proofview.tclFOCUSEV evk (Tactics.intro_patterns with_evars pat)) main_holes intropatterns)
+  in
 
   if with_evars then Proofview.shelve_unifiable else guard_no_unifiable
+
+
+
+
+(**
+
+
+  FAILURES
+    success/Conjecture.v ... Error! (should be accepted)
+    success/destruct.v ... Error! (should be accepted)
+    success/induct.v ... Error! (should be accepted)
+    success/intros.v ... Error! (should be accepted)
+    success/InversionSigma.v ... Error! (should be accepted)
+    success/setoid_test.v ... Error! (should be accepted)
+    success/sprop_hcons.v ... Error! (should be accepted)
+    bugs/bug_17585_1.v ... Error! (should be accepted)
+    bugs/bug_1791.v ... Error! (should be accepted)
+    bugs/bug_1951.v ... Error! (should be accepted)
+    bugs/bug_2378.v ... Error! (should be accepted)
+    bugs/bug_2955.v ... Error! (should be accepted)
+    bugs/bug_3262.v ... Error! (should be accepted)
+    bugs/bug_3306.v ... Error! (should be accepted)
+    bugs/bug_3559.v ... Error! (should be accepted)
+    bugs/bug_4780.v ... Error! (should be accepted)
+    bugs/bug_5797.v ... Error! (should be accepted)
+    bugs/bug_6661.v ... Error! (should be accepted)
+    bugs/bug_8004.v ... Error! (should be accepted)
+    bugs/bug_8785.v ... Error! (should be accepted)
+    bugs/HoTT_coq_047.v ... Error! (should be accepted)
+    bugs/HoTT_coq_067.v ... Error! (should be accepted)
+    bugs/HoTT_coq_107.v ... Error! (should be accepted)
+    bugs/HoTT_coq_108.v ... Error! (should be accepted)
+    bugs/HoTT_coq_123.v ... Error! (should be accepted)
+    output/bug_13266.v ... Error! (unexpected output)
+    output/CoercionOnHole.v ... Error! (unexpected output)
+    output/Error_msg_diffs.v ... Error! (unexpected output)
+    output/Show.v ... Error! (unexpected output)
+    misc/printers.sh ... Error!
+    ssr/rew_polyuniv.v ... Error! (should be accepted)
+    ide/blocking-futures.fake ... Error!
+    coqchk/bug_7539.v ... Error! (should be accepted)
+    ltac2/example2.v ... Error! (should be accepted)*)
