@@ -50,5 +50,6 @@ val typecheck_inductive : env -> sec_univs:UVars.Instance.t option
   * Constr.rel_context
   * ((inductive_arity * Constr.types array) *
      (Constr.rel_context * (Constr.rel_context * Constr.types) array) *
+     Sorts.t list option *
      squash_info option)
     array

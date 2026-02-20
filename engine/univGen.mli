@@ -81,6 +81,8 @@ val pr_sort_context : (Sorts.QVar.t -> Pp.t) -> (Univ.Level.Set.elt -> Pp.t) ->
 
 val fresh_instance : AbstractContext.t -> Instance.t in_sort_context_set
 
+val fresh_sort : unit -> Sorts.t in_sort_context_set
+
 (** The globref is only used for the error message when there is a mismatch. *)
 val fresh_instance_from : ?loc:Loc.t -> AbstractContext.t -> (GlobRef.t * Instance.t) option ->
   Instance.t in_sort_context_set

@@ -230,3 +230,8 @@ let fresh_sort_context_instance ((qs, us), csts) =
   let qs, qsubst = QVar.Set.fold qfold qs (QVar.Set.empty, QVar.Map.empty) in
   let csts = subst_poly_constraints (qsubst, usubst) csts in
   (qsubst, usubst), ((qs, us), csts)
+
+let fresh_sort () =
+  let q = fresh_sort_quality ()
+  and u = fresh_level () in
+  Sorts.qsort q (Universe.make u), ((QVar.Set.singleton q, Level.Set.singleton u), PConstraints.empty)

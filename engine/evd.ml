@@ -1204,6 +1204,19 @@ let check_quality_constraints evd qcst =
   let qcst = UVars.QPairSet.fold fold qcst UnivProblem.Set.empty in
   UState.check_constraints evd.universes qcst
 
+let fresh_geq_sort ?loc ?(rigid=univ_flexible) ?annot env evd s =
+  match annot with
+  | None ->
+    if Univ.Level.Set.cardinal (Sorts.levels s) <= 1 then
+      evd, s
+    else
+      let evd, l = new_univ_variable ?loc rigid evd in
+      let s' = Sorts.make (Sorts.quality s) l in
+      set_leq_sort evd s s', s'
+  | Some annot ->
+    let evd = set_leq_sort evd s annot in
+    evd, annot
+
 let fix_undefined_variables evd =
   { evd with universes = UState.fix_undefined_variables evd.universes }
 
@@ -1678,6 +1691,7 @@ module MiniEConstr = struct
     let make s = s
     let kind = normalize_sort
     let unsafe_to_sorts s = s
+    let unsafe_eq = Refl
   end
 
   module EInstance =

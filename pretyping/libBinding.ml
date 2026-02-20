@@ -492,13 +492,13 @@ let get_indices indb u =
   weaken_context (Vars.subst_instance_context u (EConstr.of_rel_context indices))
 
 (* make match *)
-let make_case_or_projections naming_vars mib ind indb u key_uparams key_nuparams params indices mk_case_pred case_relevance tm_match tc =
+let make_case_or_projections naming_vars mib ind indb u key_uparams key_nuparams params indices mk_case_pred pred_sort tm_match tc =
   let* env = get_env in
   let* sigma = get_sigma in
   let case_info = Inductiveops.make_case_info env ind MatchStyle in
 
   let case_invert =
-    if Inductiveops.Internal.should_invert_case env sigma (ERelevance.kind sigma case_relevance) case_info
+    if Inductiveops.Internal.should_invert_case env sigma (ERelevance.kind sigma (ESorts.relevance_of_sort pred_sort)) case_info
     then Constr.CaseInvert {indices=indices}
     else Constr.NoInvert
   in
@@ -516,7 +516,7 @@ let make_case_or_projections naming_vars mib ind indb u key_uparams key_nuparams
     (* return type *)
     let* fresh_annot = get_anames (key_both @ [key_var_match]) in
     let* return_type = mk_case_pred key_fresh_indices key_var_match in
-    return @@ ((fresh_annot, return_type), case_relevance)
+    return @@ ((fresh_annot, return_type), pred_sort)
   in
 
   let branch pos_ctor ctor =

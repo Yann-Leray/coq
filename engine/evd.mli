@@ -666,6 +666,9 @@ val fresh_array_instance : ?loc:Loc.t -> ?rigid:rigid
 val fresh_global : ?loc:Loc.t -> ?rigid:rigid -> ?names:einstance -> env ->
   evar_map -> GlobRef.t -> evar_map * econstr
 
+val fresh_geq_sort : ?loc:Loc.t -> ?rigid:rigid -> ?annot:esorts
+  -> env -> evar_map -> esorts -> evar_map * esorts
+
 (** Partially constructed constrs. *)
 
 type unsolvability_explanation = SeveralInstancesFound of int
@@ -698,6 +701,7 @@ module MiniEConstr : sig
     val make : Sorts.t -> t
     val kind : evar_map -> t -> Sorts.t
     val unsafe_to_sorts : t -> Sorts.t
+    val unsafe_eq : (t, Sorts.t) eq
   end
 
   module EInstance : sig

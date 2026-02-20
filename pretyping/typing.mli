@@ -35,7 +35,7 @@ val solve_evars : env -> evar_map -> constr -> evar_map * constr
 (** Raise an error message if incorrect elimination for this inductive
     (first constr is term to match, second is return predicate) *)
 val check_allowed_sort : env -> evar_map -> inductive puniverses -> constr -> constr ->
-  evar_map * ERelevance.t
+  evar_map * ESorts.t
 
 val check_fix_with_elims : env -> evar_map -> Constr.fixpoint -> evar_map
 
@@ -72,7 +72,6 @@ val recheck_against : Environ.env -> evar_map -> constr -> constr -> evar_map * 
 
 type ('constr,'types,'r) bad_relevance =
 | BadRelevanceBinder of 'r * ('constr,'types,'r) Context.Rel.Declaration.pt
-| BadRelevanceCase of 'r * 'constr
 
 val bad_relevance_msg : (Environ.env * evar_map * (constr, types, ERelevance.t) bad_relevance) CWarnings.msg
 

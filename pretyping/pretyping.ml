@@ -589,6 +589,10 @@ let pretype_sort ?loc ~flags sigma s =
   let sigma, s = sort ?loc ~flags sigma s in
   judge_of_sort ?loc sigma s
 
+let pretype_sort_annot ?loc ~flags env sigma annot s =
+  let evd, annot = Option.fold_left_map (sort ?loc ~flags) sigma annot in
+  Evd.fresh_geq_sort ?loc !!env evd ~rigid:univ_flexible ?annot s
+
 let new_typed_evar env sigma ?naming ?rrpat ~src tycon =
   match tycon with
   | Some ty ->
@@ -622,9 +626,9 @@ type pretyper = {
   pretype_lambda : pretyper -> Name.t * binding_kind * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
   pretype_prod : pretyper -> Name.t * binding_kind * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
   pretype_letin : pretyper -> Name.t * glob_constr * glob_constr option * glob_constr -> unsafe_judgment pretype_fun;
-  pretype_cases : pretyper -> Constr.case_style * glob_constr option * tomatch_tuples * cases_clauses -> unsafe_judgment pretype_fun;
-  pretype_lettuple : pretyper -> Name.t list * (Name.t * glob_constr option) * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
-  pretype_if : pretyper -> glob_constr * (Name.t * glob_constr option) * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
+  pretype_cases : pretyper -> Constr.case_style * predicate_return * tomatch_tuples * cases_clauses -> unsafe_judgment pretype_fun;
+  pretype_lettuple : pretyper -> Name.t list * (Name.t * predicate_return) * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
+  pretype_if : pretyper -> glob_constr * (Name.t * predicate_return) * glob_constr * glob_constr -> unsafe_judgment pretype_fun;
   pretype_rec : pretyper -> glob_fix_kind * Id.t array * glob_decl list array * glob_constr array * glob_constr array -> unsafe_judgment pretype_fun;
   pretype_sort : pretyper -> glob_sort -> unsafe_judgment pretype_fun;
   pretype_hole : pretyper -> Evar_kinds.glob_evar_kind -> unsafe_judgment pretype_fun;
@@ -1368,7 +1372,8 @@ struct
       if not record then
         let f = it_mkLambda_or_LetIn f fsign in
         let ci = make_case_info !!env (ind_of_ind_type indt) LetStyle in
-          mkCase (EConstr.contract_case !!env sigma (ci, (p,rci), make_case_invert !!env sigma indt ~case_relevance:rci ci, cj.uj_val,[|f|]))
+          mkCase (EConstr.contract_case !!env sigma (ci, (p, rci),
+          make_case_invert !!env sigma indt ~case_relevance:(ESorts.relevance_of_sort rci) ci, cj.uj_val,[|f|]))
       else it_mkLambda_or_LetIn f fsign
     in
     (* Make dependencies from arity signature impossible *)
@@ -1382,7 +1387,7 @@ struct
       let nar = List.length arsgn in
       let psign',env_p = push_rel_context ~hypnaming ~force_names:true sigma psign predenv in
           (match po with
-          | Some p ->
+          | Some (p, annot) ->
             let sigma, pj = pretype_type empty_valcon env_p sigma p in
             let ccl = nf_evar sigma pj.utj_val in
             let p = it_mkLambda_or_LetIn ccl psign' in
@@ -1392,11 +1397,10 @@ struct
             let lp = lift cs.cs_nargs p in
             let fty = hnf_lam_applist !!env sigma lp inst in
             let sigma, fj = pretype (mk_tycon fty) env_f sigma d in
-            let sigma, v =
-              let ind,_ = dest_ind_family indf in
-                let sigma, rci = Typing.check_allowed_sort !!env sigma ind cj.uj_val p in
-                sigma, obj sigma indty rci p cj.uj_val fj.uj_val
-            in
+            let ind,_ = dest_ind_family indf in
+            let sigma, s = Typing.check_allowed_sort !!env sigma ind cj.uj_val p in
+            let sigma, annot = pretype_sort_annot ~flags env sigma annot s in
+            let v = obj sigma indty annot p cj.uj_val fj.uj_val in
             sigma, { uj_val = v; uj_type = (substl (realargs@[cj.uj_val]) ccl) }
 
           | None ->
@@ -1411,15 +1415,16 @@ struct
                   cj.uj_val in
                  (* let ccl = refresh_universes ccl in *)
             let p = it_mkLambda_or_LetIn (lift (nar+1) ccl) psign' in
-            let sigma, v =
-              let ind,_ = dest_ind_family indf in
-                let sigma, rci = Typing.check_allowed_sort !!env sigma ind cj.uj_val p in
-                sigma, obj sigma indty rci p cj.uj_val fj.uj_val
-            in sigma, { uj_val = v; uj_type = ccl })
+            let ind,_ = dest_ind_family indf in
+            let sigma, s = Typing.check_allowed_sort !!env sigma ind cj.uj_val p in
+            let sigma, annot = pretype_sort_annot ~flags env sigma None s in
+            let v = obj sigma indty annot p cj.uj_val fj.uj_val in
+            sigma, { uj_val = v; uj_type = ccl })
 
   let pretype_cases self (sty, po, tml, eqns)  =
     fun ?loc ~flags tycon env sigma ->
     let pretype tycon env sigma c = eval_pretyper self ~flags tycon env sigma c in
+    let sigma, po = Option.fold_left_map (fun acc (a, b) -> let acc, b = (Option.fold_left_map (sort ?loc ~flags)) acc b in acc, (a, b)) sigma po in
     Cases.compile_cases ?loc ~program_mode:flags.program_mode sty (pretype, sigma) tycon env (po,tml,eqns)
 
   let pretype_if self (c, (na, po), b1, b2) =
@@ -1447,19 +1452,19 @@ struct
     let predenv = Cases.make_return_predicate_ltac_lvar env sigma na c cj.uj_val in
     let hypnaming = VarSet.variables (Global.env ()) in
     let psign,env_p = push_rel_context ~hypnaming sigma psign predenv in
-    let sigma, pred, p = match po with
-      | Some p ->
+    let sigma, pred, p, annot = match po with
+      | Some (p, annot) ->
         let sigma, pj = eval_type_pretyper self ~flags empty_valcon env_p sigma p in
         let ccl = nf_evar sigma pj.utj_val in
         let pred = it_mkLambda_or_LetIn ccl psign in
         let typ = lift (- nar) (beta_applist sigma (pred,[cj.uj_val])) in
-        sigma, pred, typ
+        sigma, pred, typ, annot
       | None ->
         let sigma, p = match tycon with
           | Some ty -> sigma, ty
           | None -> new_type_evar env sigma ~src:(loc,Evar_kinds.CasesType false)
         in
-        sigma, it_mkLambda_or_LetIn (lift (nar+1) p) psign, p in
+        sigma, it_mkLambda_or_LetIn (lift (nar+1) p) psign, p, None in
     let pred = nf_evar sigma pred in
     let p = nf_evar sigma p in
     let f sigma cs b =
@@ -1479,11 +1484,13 @@ struct
     let sigma, v =
       let ind,_ = dest_ind_family indf in
       let pred = nf_evar sigma pred in
-      let sigma, rci = Typing.check_allowed_sort !!env sigma ind cj.uj_val pred in
+      let sigma, s = Typing.check_allowed_sort !!env sigma ind cj.uj_val pred in
+        let sigma, annot = pretype_sort_annot ~flags env sigma annot s in
       let ci = make_case_info !!env (fst ind) IfStyle in
-      sigma, mkCase (EConstr.contract_case !!env sigma
-                       (ci, (pred,rci),
-                        make_case_invert !!env sigma indty ~case_relevance:rci ci, cj.uj_val,
+      sigma,
+        mkCase (EConstr.contract_case !!env sigma
+                       (ci, (pred, annot),
+                        make_case_invert !!env sigma indty ~case_relevance:(ESorts.relevance_of_sort annot) ci, cj.uj_val,
                         [|b1;b2|]))
     in
     let cj = { uj_val = v; uj_type = p } in

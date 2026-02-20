@@ -813,6 +813,9 @@ let eq_constr_univs_test ~evd ~extended_evd t u =
   let t = EConstr.Unsafe.to_constr t
   and u = EConstr.Unsafe.to_constr u in
   let sigma = ref extended_evd in
+  let eq_annot r1 r2 =
+    Sorts.Quality.equal EConstr.ESorts.(quality !sigma (make r1)) EConstr.ESorts.(quality !sigma (make r2))
+  in
   let eq_universes _ u1 u2 =
     let u1 = EConstr.EInstance.(kind !sigma (make u1)) in
     let u2 = EConstr.EInstance.(kind !sigma (make u2)) in
@@ -832,6 +835,6 @@ let eq_constr_univs_test ~evd ~extended_evd t u =
   let kind1 = kind_of_term_upto evd in
   let kind2 = kind_of_term_upto extended_evd in
   let rec eq_constr' nargs m n =
-    Constr.compare_head_gen_with kind1 kind2 eq_universes eq_sorts (eq_existential eq_constr') eq_constr' nargs m n
+    Constr.compare_head_gen_with kind1 kind2 eq_annot eq_universes eq_sorts (eq_existential eq_constr') eq_constr' nargs m n
   in
-  Constr.compare_head_gen_with kind1 kind2 eq_universes eq_sorts (eq_existential eq_constr') eq_constr' 0 t u
+  Constr.compare_head_gen_with kind1 kind2 eq_annot eq_universes eq_sorts (eq_existential eq_constr') eq_constr' 0 t u

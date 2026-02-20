@@ -171,7 +171,7 @@ type record_info =
 | PrimRecord of {
     id : Id.t;
     projections : Id.t array;
-    relevances : Sorts.relevance array;
+    relevances : Sorts.t array;
     tys : types array;
     has_eta : has_eta;
   }
@@ -331,7 +331,7 @@ type head_pattern =
 
 and pattern_elimination =
   | PEApp     of pattern_argument array
-  | PECase    of inductive * pattern_argument * pattern_argument array
+  | PECase    of inductive * pattern_argument * (int option, int option) sort_pattern * pattern_argument array
   | PEProj    of Projection.Repr.t
 
 and head_elimination = head_pattern * pattern_elimination list

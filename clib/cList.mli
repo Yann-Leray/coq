@@ -132,6 +132,10 @@ val map4 : ('a -> 'b -> 'c -> 'd -> 'e) -> 'a list -> 'b list -> 'c list ->
   'd list -> 'e list
 (** Like [map] but for 4 lists. *)
 
+val map5 : ('a -> 'b -> 'c -> 'd -> 'e -> 'f) -> 'a list -> 'b list -> 'c list ->
+  'd list -> 'e list -> 'f list
+(** Like [map] but for 5 lists. *)
+
 val map_until : ('a -> 'b option) -> 'a list -> 'b list * 'a list
 (** [map_until f l] applies f to the elements of l until one returns None,
     then returns the list of elements where f was applied
@@ -192,6 +196,10 @@ val fold_left3 : ('a -> 'b -> 'c -> 'd -> 'a) -> 'a -> 'b list -> 'c list -> 'd 
 
 val fold_left4 : ('a -> 'b -> 'c -> 'd -> 'e -> 'a) -> 'a -> 'b list -> 'c list -> 'd list -> 'e list -> 'a
 (** Like [List.fold_left] but for 4 lists; raise [Invalid_argument _] if
+    not all lists of the same size *)
+
+val fold_left5 : ('acc -> 'b -> 'c -> 'd -> 'e -> 'f -> 'acc) -> 'acc -> 'b list -> 'c list -> 'd list -> 'e list -> 'f list -> 'acc
+(** Like [List.fold_left] but for 5 lists; raise [Invalid_argument _] if
     not all lists of the same size *)
 
 val fold_left2_set : exn -> ('a -> 'b -> 'c -> 'b list -> 'c list -> 'a) -> 'a -> 'b list -> 'c list -> 'a

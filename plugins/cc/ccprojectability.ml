@@ -217,9 +217,9 @@ let make_selector_match_indices env sigma ~pos ~special c (ind_fam, ind_args) re
   in
   let brl =
     List.map build_branch(CList.interval 1 (Array.length mip.mind_consnames)) in
-  let rci = ERelevance.relevant in (* TODO relevance *)
+  let s = Retyping.get_sort_of env sigma p in
   let ci = make_case_info env ind MatchStyle in
-  make_case_or_project env sigma indt ci (p, rci) c (Array.of_list brl)
+  make_case_or_project env sigma indt ci (p, s) c (Array.of_list brl)
 
 (*builds a projection in the dependently typed case where a term_composition was found for the fields type*)
 let build_dependent_projection_with_term_composition env sigma cnstr default special argty term_composition ((ind, ind_params) as ind_fam) ind_args =

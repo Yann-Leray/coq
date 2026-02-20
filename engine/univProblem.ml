@@ -127,6 +127,13 @@ let enforce_eq_qualities qs qs' cstrs =
       if Sorts.Quality.equal a b then c else Set.add (QEq (a, b)) c)
     cstrs qs qs'
 
+let compare_sort_annots r r' cstrs =
+  let q = Sorts.quality r
+  and q' = Sorts.quality r' in
+  let cstrs = if Sorts.Quality.equal q q' then cstrs else Set.add (QEq (q, q')) cstrs in
+  (* let cstrs = Set.add (UWeak (u, u')) cstrs in | How to add weak constraint to universes *)
+  cstrs
+
 let compare_cumulative_instances  cv_pb variances u u' cstrs =
   let make u = Sorts.sort_of_univ @@ Univ.Universe.make u in
   let qs, us = UVars.Instance.to_array u

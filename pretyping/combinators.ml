@@ -265,6 +265,7 @@ let make_selector env sigma ~pos ~special ~default c ctype =
   let (ind, _),_ = dest_ind_family indf in
   let () = Tacred.check_privacy env ind in
   let typ = Retyping.get_type_of env sigma default in
+  let s = Retyping.get_sort_of env sigma typ in
   let (mib,mip) = Inductive.lookup_mind_specif env ind in
   let deparsign = make_arity_signature env sigma true indf in
   let p = it_mkLambda_or_LetIn typ deparsign in
@@ -275,6 +276,5 @@ let make_selector env sigma ~pos ~special ~default c ctype =
     it_mkLambda_or_LetIn endpt args in
   let brl =
     List.map build_branch(List.interval 1 (Array.length mip.mind_consnames)) in
-  let rci = ERelevance.relevant in (* TODO relevance *)
   let ci = make_case_info env ind MatchStyle in
-  Inductiveops.make_case_or_project env sigma indt ci (p, rci) c (Array.of_list brl)
+  Inductiveops.make_case_or_project env sigma indt ci (p, s) c (Array.of_list brl)

@@ -1274,6 +1274,9 @@ let intern_instance ~local_univs = function
     let us = List.map (map_glob_sort_gen (intern_sort_name ~local_univs)) us in
     Some (qs, us)
 
+let intern_qualuniv ~local_univs : sort_expr option -> glob_sort option =
+  Option.map (intern_sort ~local_univs)
+
 let intern_name_alias = function
   | { CAst.v = CRef(qid,u) } ->
       let r =
@@ -2172,9 +2175,9 @@ module Interner = struct
   ; proj : t -> (explicit_flag * (qualid * instance_expr option)
               * (constr_expr * explicitation CAst.t option) list * constr_expr) fn
   ; record : t -> ((qualid * constr_expr) list) fn
-  ; cases : t -> (Constr.case_style * constr_expr option * case_expr list * branch_expr list) fn
-  ; lettuple : t -> (lname list * (lname option * constr_expr option) * constr_expr * constr_expr) fn
-  ; if_ : t -> (constr_expr * (lname option * constr_expr option) * constr_expr * constr_expr) fn
+  ; cases : t -> (Constr.case_style * cases_return_clause * case_expr list * branch_expr list) fn
+  ; lettuple : t -> (lname list * (lname option * cases_return_clause) * constr_expr * constr_expr) fn
+  ; if_ : t -> (constr_expr * (lname option * cases_return_clause) * constr_expr * constr_expr) fn
   ; hole : t -> Evar_kinds.glob_evar_kind option fn
   ; genarg : t -> GenConstr.raw fn
   ; genargglob : t -> GenConstr.glb fn
@@ -2257,6 +2260,8 @@ let intern self genv lvar c = CAst.with_loc_val (fun ?loc ->
 let intern_type self genv env = intern self genv (set_type_scope env)
 
 let intern_type_no_implicit self genv env = intern self genv (restart_no_binders (set_type_scope env))
+
+let intern_return_type self genv env lvar (r, qu) = intern self genv (set_type_scope env) lvar r, intern_qualuniv ~local_univs:env.local_univs qu
 
 let intern_no_implicit self genv env = intern self genv (restart_no_binders env)
 
@@ -2632,12 +2637,12 @@ let record self genv env lvar ?loc fs =
   end
 
 let cases self genv env lvar ?loc (sty, rtnpo, tms, eqns) =
-  let intern_type env = intern_type self genv env lvar in
+  let intern_return_type env = intern_return_type self genv env lvar in
   let as_in_vars = List.fold_left (fun acc (_,na,inb) ->
       (Option.fold_left (fun acc { CAst.v = y } -> Name.fold_right Id.Set.add y acc) acc na))
       Id.Set.empty tms in
   (* as, in & return vars *)
-  let forbidden_vars = Option.cata free_vars_of_constr_expr as_in_vars rtnpo in
+  let forbidden_vars = Option.cata (fst %> free_vars_of_constr_expr) as_in_vars rtnpo in
   let tms,ex_ids,aliases,match_from_in = List.fold_right
       (fun citm (inds,ex_ids,asubst,matchs) ->
          let ((tm,ind),extra_id,(ind_ids,alias_subst,match_td)) =
@@ -2659,12 +2664,14 @@ let cases self genv env lvar ?loc (sty, rtnpo, tms, eqns) =
       | (_, c) :: q when is_patvar c -> aux q
       | l -> l
     in aux match_from_in in
-  let rtnpo = Option.map (replace_vars_constr_expr aliases) rtnpo in
+  let rtnpo = Option.map (on_fst @@ replace_vars_constr_expr aliases) rtnpo in
   let rtnpo = match stripped_match_from_in with
-    | [] -> Option.map (intern_type (slide_binders env')) rtnpo (* Only PatVar in "in" clauses *)
+    | [] -> Option.map (intern_return_type (slide_binders env')) rtnpo (* Only PatVar in "in" clauses *)
     | l ->
       (* Build a return predicate by expansion of the patterns of the "in" clause *)
       let thevars, thepats = List.split l in
+      let rtnpo, rtqu = match rtnpo with None -> None, None | Some (rt, qu) -> Some rt, qu in
+      let rtqu = intern_qualuniv ~local_univs:env.local_univs rtqu in
       let sub_rtn = (* Some (GSort (Loc.ghost,GType None)) *) None in
       let sub_tms = List.map (fun id -> (DAst.make @@ GVar id),(Name id,None)) thevars (* "match v1,..,vn" *) in
       let main_sub_eqn = CAst.make @@
@@ -2676,7 +2683,7 @@ let cases self genv env lvar ?loc (sty, rtnpo, tms, eqns) =
         if List.for_all (irrefutable genv) thepats then [] else
           [CAst.make @@ ([],List.make (List.length thepats) (DAst.make @@ PatVar Anonymous), (* "|_,..,_" *)
                          DAst.make @@ GHole(GImpossibleCase))]   (* "=> _" *) in
-      Some (DAst.make @@ GCases(MatchStyle,sub_rtn,sub_tms,main_sub_eqn::catch_all_sub_eqn))
+      Some (DAst.make @@ GCases(MatchStyle,sub_rtn,sub_tms,main_sub_eqn::catch_all_sub_eqn), rtqu)
   in
   let eqns' = List.map (intern_eqn self genv env lvar (List.length tms)) eqns in
   DAst.make ?loc @@
@@ -2684,27 +2691,27 @@ let cases self genv env lvar ?loc (sty, rtnpo, tms, eqns) =
 
 let lettuple self genv env lvar ?loc (nal, (na,po), b, c) =
   let intern env = intern self genv env lvar in
-  let intern_type env = intern_type self genv env lvar in
+  let intern_return_type env = intern_return_type self genv env lvar in
   let env' = reset_tmp_scope env in
   (* "in" is None so no match to add *)
   let ((b',(na',_)),_,_) = intern_case_item self genv env' lvar Id.Set.empty (b,na,None) in
   let p' = Option.map (fun u ->
       let env'' = push_name_env ~dump:true (snd lvar) [] env'
           (CAst.make na') in
-      intern_type (slide_binders env'') u) po in
+      intern_return_type (slide_binders env'') u) po in
   DAst.make ?loc @@
   GLetTuple (List.map (fun { CAst.v } -> v) nal, (na', p'), b',
              intern (List.fold_left (push_name_env ~dump:true (snd lvar) []) env nal) c)
 
 let if_ self genv env lvar ?loc (c, (na,po), b1, b2) =
   let intern env = intern self genv env lvar in
-  let intern_type env = intern_type self genv env lvar in
+  let intern_return_type env = intern_return_type self genv env lvar in
   let env' = reset_tmp_scope env in
   let ((c',(na',_)),_,_) = intern_case_item self genv env' lvar Id.Set.empty (c,na,None) in (* no "in" no match to ad too *)
   let p' = Option.map (fun p ->
       let env'' = push_name_env ~dump:true (snd lvar) [] env
           (CAst.make na') in
-      intern_type (slide_binders env'') p) po in
+      intern_return_type (slide_binders env'') p) po in
   DAst.make ?loc @@
   GIf (c', (na', p'), intern env b1, intern env b2)
 

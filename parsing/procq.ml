@@ -352,6 +352,7 @@ module Constr =
     let sort = Entry.make "sort"
     let sort_quality_or_set = Entry.make "sort_quality_or_set"
     let sort_quality_var = Entry.make "sort_quality_var"
+    let sort_annot = Entry.make "sort_annot"
     let pattern = Entry.make "pattern"
     let constr_pattern = Entry.make "constr_pattern"
     let cpattern = Entry.make "cpattern"

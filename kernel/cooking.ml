@@ -396,3 +396,6 @@ let lift_quality info q =
 
 let lift_relevance info relevance =
   UVars.subst_sort_level_relevance (make_instance_subst info.abstr_info.abstr_ausubst) relevance
+
+let lift_sort info sort =
+  UVars.subst_sort_level_sort (make_instance_subst info.abstr_info.abstr_ausubst) sort

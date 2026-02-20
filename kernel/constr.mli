@@ -161,7 +161,7 @@ end
 type ('constr,'r) pcase_branch = (Name.t,'r) Context.pbinder_annot array * 'constr
 (** Names bound by matching the constructor for this branch. *)
 
-type ('types,'r) pcase_return = ((Name.t,'r) Context.pbinder_annot array * 'types) * 'r
+type ('types, 'r, 'sort) pcase_return = ((Name.t, 'r) Context.pbinder_annot array * 'types) * 'sort
 (** Names of the indices + name of self *)
 
 type 'constr pcase_invert =
@@ -172,13 +172,13 @@ type 'constr pcase_invert =
   (** SProp to non SProp only:
       No constructors or reduce when the indices match those of the unique constructor. *)
 
-type ('constr, 'types, 'univs, 'r) pcase =
-  case_info * 'univs * 'constr array * ('types,'r) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
+type ('constr, 'types, 'univs, 'r, 'sort) pcase =
+  case_info * 'univs * 'constr array * ('types, 'r, 'sort) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
 
 type case_invert = constr pcase_invert
-type case_return = (types, Sorts.relevance) pcase_return
+type case_return = (types, Sorts.relevance, Sorts.t) pcase_return
 type case_branch = (constr, Sorts.relevance) pcase_branch
-type case = (constr, types, UVars.Instance.t, Sorts.relevance) pcase
+type case = (constr, types, UVars.Instance.t, Sorts.relevance, Sorts.t) pcase
 
 val mkCase : case -> constr
 
@@ -187,14 +187,14 @@ val mkCase : case -> constr
       [typarray = [|t1,...tn|]]
       [bodies   = [|b1,.....bn|]]
    then [mkFix ((recindxs,i), funnames, typarray, bodies) ]
-   constructs the {% $ %}i{% $ %}th function of the block (counting from 0)
+   constructs the [i]th function of the block (counting from 0)
 
     [Fixpoint f1 [ctx1] = b1
      with     f2 [ctx2] = b2
      ...
      with     fn [ctxn] = bn.]
 
-   where the length of the {% $ %}j{% $ %}th context is {% $ %}ij{% $ %}.
+   where the length of the [j]th context is [ij].
 *)
 type ('constr, 'types, 'r) prec_declaration =
     (Name.t, 'r) Context.pbinder_annot array * 'types array * 'constr array
@@ -270,7 +270,7 @@ type ('constr, 'types, 'sort, 'univs, 'r) kind_of_term =
   | Construct of (constructor * 'univs)
   (** A constructor of an inductive type defined by [Variant],
      [Inductive] or [Record] Vernacular-commands. *)
-  | Case      of case_info * 'univs * 'constr array * ('types,'r) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
+  | Case      of case_info * 'univs * 'constr array * ('types, 'r, 'sort) pcase_return * 'constr pcase_invert * 'constr * ('constr,'r) pcase_branch array
   (** [Case (ci,u,params,p,iv,c,brs)] is a [match c return p with brs]
      expression. [c] lives in inductive [ci.ci_ind] at universe
      instance [u] and parameters [params]. If this match has case
@@ -356,13 +356,13 @@ val destSort : constr -> Sorts.t
 (** Destructs a casted term *)
 val destCast : constr -> constr * cast_kind * constr
 
-(** Destructs the product {% $ %}(x:t_1)t_2{% $ %} *)
+(** Destructs the product [(x:t_1)t_2] *)
 val destProd : types -> Name.t binder_annot * types * types
 
-(** Destructs the abstraction {% $ %}[x:t_1]t_2{% $ %} *)
+(** Destructs the abstraction [[x:t_1]t_2] *)
 val destLambda : constr -> Name.t binder_annot * types * constr
 
-(** Destructs the let {% $ %}[x:=b:t_1]t_2{% $ %} *)
+(** Destructs the let [[x:=b:t_1]t_2] *)
 val destLetIn : constr -> Name.t binder_annot * constr * types * constr
 
 (** Destructs an application *)
@@ -396,12 +396,12 @@ val destCase : constr -> case
 (** Destructs a projection *)
 val destProj : constr -> Projection.t * Sorts.relevance * constr
 
-(** Destructs the {% $ %}i{% $ %}th function of the block
+(** Destructs the [i]th function of the block
    [Fixpoint f{_ 1} ctx{_ 1} = b{_ 1}
     with    f{_ 2} ctx{_ 2} = b{_ 2}
     ...
     with    f{_ n} ctx{_ n} = b{_ n}],
-   where the length of the {% $ %}j{% $ %}th context is {% $ %}ij{% $ %}.
+   where the length of the [j]th context is [ij].
 *)
 val destFix : constr -> fixpoint
 
@@ -574,7 +574,9 @@ type 'univs instance_compare_fn = (GlobRef.t * int) option ->
    compare universe instances, [s] to compare sorts; Cast's, binders
    name and Cases annotations are not taken into account *)
 
-val compare_head_gen : UVars.Instance.t instance_compare_fn ->
+val compare_head_gen :
+  (Sorts.t -> Sorts.t -> bool) ->
+  UVars.Instance.t instance_compare_fn ->
   (Sorts.t -> Sorts.t -> bool) ->
   (existential -> existential -> bool) ->
   constr constr_compare_fn ->
@@ -583,6 +585,7 @@ val compare_head_gen : UVars.Instance.t instance_compare_fn ->
 val compare_head_gen_leq_with :
   ('v -> ('v, 'v, 'sort, 'univs, 'r) kind_of_term) ->
   ('v -> ('v, 'v, 'sort, 'univs, 'r) kind_of_term) ->
+  ('sort -> 'sort -> bool) ->
   'univs instance_compare_fn ->
   ('sort -> 'sort -> bool) ->
   ('v pexistential -> 'v pexistential -> bool) ->
@@ -597,6 +600,7 @@ val compare_head_gen_leq_with :
 val compare_head_gen_with :
   ('v -> ('v, 'v, 'sort, 'univs, 'r) kind_of_term) ->
   ('v -> ('v, 'v, 'sort, 'univs, 'r) kind_of_term) ->
+  ('sort -> 'sort -> bool) ->
   'univs instance_compare_fn ->
   ('sort -> 'sort -> bool) ->
   ('v pexistential -> 'v pexistential -> bool) ->
@@ -610,7 +614,9 @@ val compare_head_gen_with :
     [s] to compare sorts for for subtyping; Cast's, binders name and
     Cases annotations are not taken into account *)
 
-val compare_head_gen_leq : UVars.Instance.t instance_compare_fn ->
+val compare_head_gen_leq :
+  (Sorts.t -> Sorts.t -> bool) ->
+  UVars.Instance.t instance_compare_fn ->
   (Sorts.t -> Sorts.t -> bool) ->
   (existential -> existential -> bool) ->
   constr constr_compare_fn ->

@@ -1050,7 +1050,7 @@ let descend_then env sigma head dirn =
   let dirn_env = EConstr.push_rel_context cstr.(dirn-1).cs_args env in
   (dirn_nlams,
    dirn_env,
-   (fun sigma dirnval (dfltval,resty) ->
+   (fun sigma dirnval (dfltval,resty, res_qualuniv) ->
       let deparsign = make_arity_signature env sigma true indf in
       let p =
         it_mkLambda_or_LetIn (lift (mip.mind_nrealargs+1) resty) deparsign in
@@ -1062,9 +1062,8 @@ let descend_then env sigma head dirn =
       let brl =
         List.map build_branch
           (List.interval 1 (Array.length mip.mind_consnames)) in
-      let rci = ERelevance.relevant in (* TODO relevance *)
       let ci = make_case_info env ind MatchStyle in
-      Inductiveops.make_case_or_project env sigma indt ci (p, rci) head (Array.of_list brl)))
+      Inductiveops.make_case_or_project env sigma indt ci (p, res_qualuniv) head (Array.of_list brl)))
 
 (* Now we need to construct the discriminator, given a discriminable
    position.  This boils down to:
@@ -1085,28 +1084,29 @@ let build_rocq_I () = pf_constr_of_global (lib_ref "core.True.I")
 
 let rec build_discriminator env sigma true_0 false_0 pos c = function
   | [] ->
+      let (false_C, _, _) = false_0 in
       begin match pos with
       | DConstruct ((_, dirn), _) ->
         let cty = get_type_of env sigma c in
-        make_selector env sigma ~pos:dirn ~special:true_0 ~default:(fst false_0) c cty
+        make_selector env sigma ~pos:dirn ~special:true_0 ~default:false_C c cty
       | DInt (i, _) ->
         let inteq = Rocqlib.lib_ref "num.int63.eqb" in
         let inteq = mkRef (inteq, EInstance.empty) in (* ints ought to be monomorphic *)
         let c = mkApp (inteq, [|mkInt i; c|]) in
         let cty = get_type_of env sigma c in
-        make_selector env sigma ~pos:1 ~special:true_0 ~default:(fst false_0) c cty
+        make_selector env sigma ~pos:1 ~special:true_0 ~default:false_C c cty
       | DFloat (f, _) ->
         let floateq = Rocqlib.lib_ref "num.float.leibniz.eqb" in
         let floateq = mkRef (floateq, EInstance.empty) in (* ints ought to be monomorphic *)
         let c = mkApp (floateq, [|mkFloat f; c|]) in
         let cty = get_type_of env sigma c in
-        make_selector env sigma ~pos:1 ~special:true_0 ~default:(fst false_0) c cty
+        make_selector env sigma ~pos:1 ~special:true_0 ~default:false_C c cty
       | DString (s, _) ->
         let streq = Rocqlib.lib_ref "strings.pstring.eqb" in
         let streq = mkRef (streq, EInstance.empty) in (* strings ought to be monomorphic *)
         let c = mkApp (streq, [|mkString s; c|]) in
         let cty = get_type_of env sigma c in
-        make_selector env sigma ~pos:1 ~special:true_0 ~default:(fst false_0) c cty
+        make_selector env sigma ~pos:1 ~special:true_0 ~default:false_C c cty
       end
   | ((sp,cnum),argnum)::l ->
       let (cnum_nlams,cnum_env,kont) = descend_then env sigma c cnum in
@@ -1185,13 +1185,14 @@ let discr_positions env sigma { eq_data = (_, _ , s, (t, _, _)) as eq_data; eq_t
   build_rocq_False () >>= fun false_0 ->
   let false_ty = Retyping.get_type_of env sigma false_0 in
   let false_kind = Retyping.get_sort_of env sigma false_0 in
+  let false_ty_sort = Retyping.get_sort_of env sigma false_ty in
   let e = next_ident_away eq_baseid (vars_of_env env) in
   let e_env = push_named (Context.Named.Declaration.LocalAssum (make_annot e ERelevance.relevant,t)) env in
 
   let discriminator =
     try
       Proofview.tclUNIT
-        (build_discriminator e_env sigma true_0 (false_0,false_ty) dirn (mkVar e) cpath)
+        (build_discriminator e_env sigma true_0 (false_0,false_ty,false_ty_sort) dirn (mkVar e) cpath)
     with
       UserError _ as ex ->
       let _, info = Exninfo.capture ex in
@@ -1335,7 +1336,8 @@ let rec build_injrec env sigma default c = function
       let (cnum_nlams,cnum_env,kont) = descend_then env sigma c cnum in
       let newc = mkRel(cnum_nlams-argnum) in
       let sigma, (subval,tuplety,dfltval) = build_injrec cnum_env sigma default newc l in
-      let res = kont sigma subval (dfltval,tuplety) in
+      let sort = Retyping.get_sort_of env sigma tuplety in
+      let res = kont sigma subval (dfltval,tuplety, sort) in
       sigma, (res, tuplety,dfltval)
     with
         UserError _ -> failwith "caught"

@@ -85,7 +85,7 @@ end
 type types = t
 type constr = t
 type existential = t pexistential
-type case_return = (t,ERelevance.t) pcase_return
+type case_return = (t,ERelevance.t, ESorts.t) pcase_return
 type case_branch = (t,ERelevance.t) pcase_branch
 type rec_declaration = (t, t, ERelevance.t) prec_declaration
 type fixpoint = (t, t, ERelevance.t) pfixpoint
@@ -105,7 +105,7 @@ val nameR : Id.t -> Name.t binder_annot
 val anonR : Name.t binder_annot
 
 type case_invert = t pcase_invert
-type case = (t, t, EInstance.t, ERelevance.t) pcase
+type case = (t, t, EInstance.t, ERelevance.t, ESorts.t) pcase
 
 type 'a puniverses = 'a * EInstance.t
 
@@ -394,6 +394,7 @@ val closed0 : Evd.evar_map -> t -> bool
 val subst_univs_level_constr : UVars.sort_level_subst -> t -> t
 val subst_instance_context : EInstance.t -> rel_context -> rel_context
 val subst_instance_constr : EInstance.t -> t -> t
+val subst_instance_sort : EInstance.t -> ESorts.t -> ESorts.t
 val subst_instance_relevance : EInstance.t -> ERelevance.t -> ERelevance.t
 
 val subst_of_rel_context_instance : rel_context -> instance -> substl
@@ -450,10 +451,10 @@ val fresh_global :
   Evd.evar_map -> GlobRef.t -> Evd.evar_map * t
 
 val expand_case : Environ.env -> Evd.evar_map ->
-  case -> (t,t,ERelevance.t) Inductive.pexpanded_case
+  case -> (t, t, ESorts.t) Inductive.pexpanded_case
 
 val annotate_case : Environ.env -> Evd.evar_map -> case ->
-  case_info * EInstance.t * t array * ((rel_context * t) * ERelevance.t) * case_invert * t * (rel_context * t) array
+  case_info * EInstance.t * t array * ((rel_context * t) * ESorts.t) * case_invert * t * (rel_context * t) array
 (** Same as above, but doesn't turn contexts into binders *)
 
 val expand_branch : Environ.env -> Evd.evar_map ->
@@ -462,7 +463,7 @@ val expand_branch : Environ.env -> Evd.evar_map ->
     constructs the typed context in which the branch lives. *)
 
 val contract_case : Environ.env -> Evd.evar_map ->
-  (t,t,ERelevance.t) Inductive.pexpanded_case -> case
+  (t, t, ESorts.t) Inductive.pexpanded_case -> case
 
 (** {5 Extra} *)
 

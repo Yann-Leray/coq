@@ -483,6 +483,13 @@ let relevance_equal r1 r2 = match r1,r2 with
   | RelevanceVar q1, RelevanceVar q2 -> QVar.equal q1 q2
   | (Relevant | Irrelevant | RelevanceVar _), _ -> false
 
+let relevance_of_quality =
+  let open Quality in
+  function
+  | QConstant QSProp -> Irrelevant
+  | QConstant (QProp | QType) -> Relevant
+  | QVar qv -> RelevanceVar qv
+
 let relevance_hash = function
   | Relevant -> 0
   | Irrelevant -> 1
@@ -524,6 +531,16 @@ let pr prv pru = function
                         ++ spc() ++ pru u ++ str "}")
 
 let raw_pr = pr QVar.raw_pr Univ.Universe.raw_pr
+
+let pr_as_annot prv pru = function
+  | SProp -> Pp.(str "@{SProp}")
+  | Prop -> Pp.(str "@{Prop}")
+  | Set -> Pp.(str "@{Type;0}")
+  | Type u -> Pp.(str "@{Type;" ++ pru u ++ str "}")
+  | QSort (q, u) -> Pp.(str "@{" ++ prv q ++ str ";"
+                        ++ spc() ++ pru u ++ str "}")
+
+let raw_pr_as_annot = pr_as_annot QVar.raw_pr Univ.Universe.raw_pr
 
 type ('q, 'u) pattern =
   | PSProp | PSSProp | PSSet | PSType of 'u | PSGlobal of QGlobal.t * 'u | PSQSort of 'q * 'u

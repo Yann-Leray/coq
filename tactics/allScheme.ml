@@ -904,6 +904,7 @@ let gen_all_one_ind suffix kn pos_ind ind u mib return_sorts key_inds key_up str
     mind_entry_arity = to_constr sigma ind_type ;
     mind_entry_consnames = Array.to_list ctors_id;
     mind_entry_lc = Array.to_list @@ Array.map (to_constr sigma) ctors_type;
+    mind_entry_proj_annot = None;
   }
 
 let generate_all_aux suffix kn u sub_temp mib uparams strpos nuparams =
@@ -1096,10 +1097,10 @@ let generate_all_theorem_aux kn kn_nested focus u mib uparams strpos nuparams : 
   let* inst_params = get_terms (key_uparams @ key_nuparams )in
   let* var_match = get_term key_VarMatch in
   let* inst_indices = get_terms key_indices in
-  let case_rev = relevance_ind ind in
+  let sort_ret = Vars.subst_instance_sort u (ESorts.make ind.mind_sort) in
   let@ (key_args, _, _, pos_ctor) =
     make_case_or_projections naming_hd_fresh mib (kn, pos_ind) ind u key_uparams key_nuparams inst_params
-      inst_indices case_pred case_rev var_match in
+      inst_indices case_pred sort_ret var_match in
   (* 5 Body of the branch *)
   let* args = compute_args_fix kn (kn_nested, u_all.(pos_ind)) pos_ind mib key_up key_preds_hold key_fixs strpos key_args in
   make_cst_typing ((kn_nested, pos_ind), u_all.(pos_ind)) pos_ctor key_uparams_preds key_nuparams (Array.of_list args)

@@ -403,7 +403,7 @@ let gen_elim_term print_constr rec_hyp kn u mib uparams nuparams ind_bodies focu
     let* inst_indices = get_terms key_indices in
     let@ (key_args, _, _, pos_ctor) =
       make_case_or_projections naming_hd_fresh mib (kn, pos_ind) ind u key_uparams key_nuparams inst_params
-        inst_indices case_pred (relevance_of_sort sort) var_match in
+        inst_indices case_pred sort var_match in
     (* 5 Body of the branch *)
     let* hyp = getij_term key_ctors pos_list pos_ctor in
     let* inst_nuparams = get_terms key_nuparams in

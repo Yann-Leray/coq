@@ -43,6 +43,10 @@ let to_entry mind (mb:mutual_inductive_body) : Entries.mutual_inductive_entry =
       in
       Some (Some (Array.map get_id mb.mind_packets))
   in
+  let annots = match mb.mind_packets.(0).mind_record with
+  | NotRecord -> None | FakeRecord -> None
+  | PrimRecord { relevances; _ } -> Some relevances
+  in
   let template = Option.map template_univ_entry mb.mind_template in
   let mind_entry_universes = match mb.mind_universes with
     | Monomorphic ->
@@ -93,6 +97,7 @@ let to_entry mind (mb:mutual_inductive_body) : Entries.mutual_inductive_entry =
             ignore ctx; (* we will check that the produced user_lc is equal to the input *)
             c
           ) ind.mind_user_lc;
+        mind_entry_proj_annot = match annots with Some annots -> Some (Array.rev_to_list annots) | None -> None
       })
       mb.mind_packets
   in
@@ -165,7 +170,7 @@ let check_same_record r1 r2 = match r1, r2 with
   | PrimRecord { relevances = r1; tys = tys1 ; _ }, PrimRecord { relevances = r2; tys = tys2 ; _ } ->
     (* The kernel doesn't care about the names, we just need to check
        that the saved types are correct. *)
-    Array.equal Sorts.relevance_equal r1 r2 &&
+    Array.equal Sorts.equal r1 r2 &&
     Array.equal Constr.equal tys1 tys2
   | (NotRecord | FakeRecord | PrimRecord _), _ -> false
 

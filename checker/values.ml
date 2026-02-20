@@ -253,7 +253,7 @@ let v_fix = v_tuple_c ("pfixpoint", [|v_tuple_c ("fix2",[|v_array v_int;v_int|])
 let v_cofix = v_tuple_c ("pcofixpoint",[|v_int;v_prec|]) in
 let v_case_invert = v_sum_c ("case_inversion", 1, [|[|v_array v_constr|]|]) in
 let v_case_branch = v_tuple_c ("case_branch", [|v_array (v_binder_annot v_name); v_constr|]) in
-let v_case_return = v_tuple_c ("case_return", [|v_tuple_c ("case_return'", [|v_array (v_binder_annot v_name); v_constr|]); v_relevance|]) in
+let v_case_return = v_tuple_c ("case_return", [|v_tuple_c ("case_return'", [|v_array (v_binder_annot v_name); v_constr|]); v_sort|]) in
   v_sum_c ("constr",0,[|
     [|v_int|]; (* Rel *)
     [|v_id|]; (* Var *)
@@ -441,7 +441,7 @@ let v_squash_info = v_sum "squash_info" 1 [|[|v_set v_quality|]|]
 let v_has_eta = v_enum "has_eta" 3
 let v_record_info =
   v_sum "record_info" 2
-    [| [| v_id; v_array v_id; v_array v_relevance; v_array v_constr; v_has_eta |] |]
+    [| [| v_id; v_array v_id; v_array v_sort; v_array v_constr; v_has_eta |] |]
 
 let v_one_ind = v_tuple "one_inductive_body"
   [|v_id;
@@ -530,9 +530,9 @@ let [_v_hpattern;v_elimination;_v_head_elim;_v_patarg] : _ Vector.t =
 
   and v_elimination =
     v_sum_c ("pattern_elimination", 0,
-         [|[|v_array v_patarg|];                    (* PEApp *)
-           [|v_ind; v_patarg; v_array v_patarg|];   (* PECase *)
-           [|v_proj_repr|];                         (* PEProj *)
+         [|[|v_array v_patarg|];                                     (* PEApp *)
+           [|v_ind; v_patarg; v_sort_pattern; v_array v_patarg|];    (* PECase *)
+           [|v_proj_repr|];                                          (* PEProj *)
          |])
 
   and v_head_elim = v_tuple_c ("head*elims", [|v_hpattern; v_list v_elimination|])

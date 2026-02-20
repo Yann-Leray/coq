@@ -207,7 +207,7 @@ val sort_and_universes_of_constr : ?init:Sorts.QVar.Set.t * Univ.Level.Set.t -> 
 
 val universes_of_constr : ?init:Univ.Level.Set.t -> constr -> Univ.Level.Set.t
 
-type ('a,'s,'u,'r) univ_visitor = {
+type ('a, 's, 'u, 'r) univ_visitor = {
   visit_sort : 'a -> 's -> 'a;
   visit_instance : 'a -> 'u -> 'a;
   visit_relevance : 'a -> 'r -> 'a;

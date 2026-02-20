@@ -78,4 +78,6 @@ val lift_quality : cooking_info -> Sorts.Quality.t -> Sorts.Quality.t
 
 val lift_relevance : cooking_info -> Sorts.relevance -> Sorts.relevance
 
+val lift_sort : cooking_info -> Sorts.t -> Sorts.t
+
 val discharge_proj_repr : cooking_info -> Names.Projection.Repr.t -> Names.Projection.Repr.t

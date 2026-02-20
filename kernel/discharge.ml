@@ -137,7 +137,7 @@ let cook_one_ind info cache ~params ~ntypes mip =
     | FakeRecord -> FakeRecord
     | PrimRecord ({ relevances; tys; _ } as pinfo) ->
         let tys = Array.map (cook_projection cache ~params) tys in
-        let relevances = Array.map (lift_relevance info) relevances in
+        let relevances = Array.map (lift_sort info) relevances in
         PrimRecord { pinfo with relevances ; tys }
   in
   let squashed = Option.map (lift_squashed info) mip.mind_squashed in

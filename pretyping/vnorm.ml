@@ -290,7 +290,10 @@ and nf_stk ?from:(from=0) env sigma c t stk  =
         let nas = List.rev_map RelDecl.get_annot realdecls @ [nameR (Id.of_string "c")] in
         expand_arity (mib, mip) (ind, u) params (Array.of_list nas)
       in
-      let p, relevance = nf_predicate env sigma (ind,u) mip params (type_of_switch sw) pctx in
+      let p, s = nf_predicate env sigma (ind,u) mip params (type_of_switch sw) pctx in
+      let sigma, annot = Evd.fresh_geq_sort ~rigid:Evd.univ_flexible env sigma s in
+      let annot = EConstr.ESorts.kind sigma annot in
+      let relevance = Sorts.relevance_of_sort annot in
       (* Calcul du type des branches *)
       let btypes = build_branches_type env sigma ind mib mip u params (pctx, p) in
       (* calcul des branches *)
@@ -310,7 +313,7 @@ and nf_stk ?from:(from=0) env sigma c t stk  =
           CaseInvert {indices=realargs}
         else NoInvert
       in
-      nf_stk env sigma (mkCase (ci, u, params, (p,relevance), iv, c, branchs)) tcase stk
+      nf_stk env sigma (mkCase (ci, u, params, (p, annot), iv, c, branchs)) tcase stk
   | Zproj p :: stk ->
     let () = assert (from = 0) in
     let ((ind, u), args) = Inductiveops.find_mrectype env sigma (EConstr.of_constr t) in
@@ -339,8 +342,8 @@ and nf_predicate env sigma ind mip params v pctx =
   let (_, v) = List.fold_right fold pctx (nb_rel env, v) in
   let env = push_rel_context pctx env in
   let body = nf_vtype env sigma v in
-  let rel = Retyping.relevance_of_type env sigma (EConstr.of_constr body) in
-  body, EConstr.Unsafe.to_relevance rel
+  let s = Retyping.get_sort_of env sigma (EConstr.of_constr body) in
+  body, s
 
 and nf_telescope env sigma len f typ =
   let open CClosure in

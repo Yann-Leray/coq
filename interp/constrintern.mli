@@ -114,9 +114,9 @@ module Interner : sig
   ; proj : t -> (explicit_flag * (qualid * instance_expr option)
               * (constr_expr * explicitation CAst.t option) list * constr_expr) fn
   ; record : t -> ((qualid * constr_expr) list) fn
-  ; cases : t -> (Constr.case_style * constr_expr option * case_expr list * branch_expr list) fn
-  ; lettuple : t -> (lname list * (lname option * constr_expr option) * constr_expr * constr_expr) fn
-  ; if_ : t -> (constr_expr * (lname option * constr_expr option) * constr_expr * constr_expr) fn
+  ; cases : t -> (Constr.case_style * cases_return_clause * case_expr list * branch_expr list) fn
+  ; lettuple : t -> (lname list * (lname option * cases_return_clause) * constr_expr * constr_expr) fn
+  ; if_ : t -> (constr_expr * (lname option * cases_return_clause) * constr_expr * constr_expr) fn
   ; hole : t -> Evar_kinds.glob_evar_kind option fn
   ; genarg : t -> GenConstr.raw fn
   ; genargglob : t -> GenConstr.glb fn

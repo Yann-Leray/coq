@@ -481,9 +481,10 @@ let rec subst_constr (subst,usubst as e) c =
   | Inr (m, _) -> mkRel m
   end
 | Const _ | Ind _ | Construct _ | Sort _ -> subst_instance_constr usubst c
-| Case (ci, u, pms, p, iv, discr, br) ->
+| Case (ci, u, pms, (p, r), iv, discr, br) ->
   let u' = usubst_instance e u in
-  let c = if u == u' then c else mkCase (ci, u', pms, p, iv, discr, br) in
+  let r' = usubst_sort e r in
+  let c = if u == u' && r == r' then c else mkCase (ci, u', pms, (p, r'), iv, discr, br) in
   Constr.map_with_binders usubs_lift subst_constr e c
 | Array (u,elems,def,ty) ->
   let u' = usubst_instance e u in
@@ -619,9 +620,9 @@ let rec to_constr lfts v =
     | FIrrelevant -> assert (!Flags.in_debugger); mkVar(Id.of_string"_IRRELEVANT_")
     | FLOCKED -> assert (!Flags.in_debugger); mkVar(Id.of_string"_LOCKED_")
 
-and to_constr_case lfts ci u pms (p,r) iv c ve env =
+and to_constr_case lfts ci u pms (p, r) iv c ve env =
   let subs = comp_subs lfts env in
-  let r = usubst_relevance subs r in
+  let r = usubst_sort subs r in
   if is_subs_id (fst env) && is_lift_id lfts then
     mkCase (ci, usubst_instance subs u, pms, (p,r), iv, to_constr lfts c, ve)
   else
@@ -633,7 +634,7 @@ and to_constr_case lfts ci u pms (p,r) iv c ve env =
     mkCase (ci,
             usubst_instance subs u,
             Array.map (fun c -> subst_constr subs c) pms,
-            (f_ctx p,r),
+            (f_ctx p, r),
             iv,
             to_constr lfts c,
             Array.map f_ctx ve)
@@ -1364,7 +1365,7 @@ let rec skip_irrelevant_stack info stk = match stk with
   (* Typing rules ensure that fix / proj over SProp is irrelevant *)
   skip_irrelevant_stack info s
 | ZcaseT (_, _, _, (_,r), _, e) :: s ->
-  let r = usubst_relevance e r in
+  let r = usubst_relevance e (Sorts.relevance_of_sort r) in
   if is_irrelevant info r then skip_irrelevant_stack info s
   else stk
 | Zprimitive _ :: _ -> assert false (* no irrelevant primitives so far *)
@@ -1388,7 +1389,7 @@ let rec knh info m stk =
     | FLOCKED -> assert false
     | FApp(a,b) -> knh info a (append_stack b (zupdate info m stk))
     | FCaseT(ci,u,pms,(_,r as p),t,br,e) ->
-      let r' = usubst_relevance e r in
+      let r' = usubst_relevance e (Sorts.relevance_of_sort r) in
       if is_irrelevant info r' then
         (mk_irrelevant, skip_irrelevant_stack info stk)
       else
@@ -1421,12 +1422,12 @@ and knht info e t stk =
     | App(a,b) ->
         knht info e a (append_stack (mk_clos_vect e b) stk)
     | Case(ci,u,pms,(_,r as p),NoInvert,t,br) ->
-      if is_irrelevant info (usubst_relevance e r) then
+      if is_irrelevant info (usubst_relevance e (Sorts.relevance_of_sort r)) then
         (mk_irrelevant, skip_irrelevant_stack info stk)
       else
         knht info e t (ZcaseT(ci, u, pms, p, br, e)::stk)
     | Case(ci,u,pms,(_,r as p),CaseInvert{indices},t,br) ->
-      if is_irrelevant info (usubst_relevance e r) then
+      if is_irrelevant info (usubst_relevance e (Sorts.relevance_of_sort r)) then
         (mk_irrelevant, skip_irrelevant_stack info stk)
       else
         let term = FCaseInvert (ci, u, pms, p, (Array.map (mk_clos e) indices), mk_clos e t, br, e) in
@@ -1685,10 +1686,13 @@ and match_elim : 'a. ('a, 'a depth) reduction -> _ -> _ -> pat_state:'a depth ->
       let specif = (specif, specif.mind_packets.(snd ci.ci_ind)) in
       let ntys_ret = Environ.expand_arity specif (ci.ci_ind, u) pms (fst p) in
       let ntys_brs = Environ.expand_branch_contexts specif u pms brs in
+      let r = usubst_sort e r in
       let prets, pbrss, elims, states = extract_or_kill4 (function [@ocaml.warning "-4"]
-      | PECase (pind, pret, pbrs) :: es, subst ->
+      | PECase (pind, pret, pr, pbrs) :: es, psubst ->
         if not @@ Ind.CanOrd.equal pind ci.ci_ind then None else
-          Some (pret, pbrs, es, subst)
+          let (let*) = Option.bind in
+          let* subst = Sorts.pattern_match pr r psubst.subst in
+          Some (pret, pbrs, es, { psubst with subst })
       | _ -> None)
           elims states
       in
@@ -2176,7 +2180,7 @@ and zip_term info tab m stk = match stk with
       let e = usubs_liftn (Array.length nas) e in
       (nas, klt info tab e c)
     in
-    let r = usubst_relevance e r in
+    let r = usubst_sort e r in
     let u = usubst_instance e u in
     let t = mkCase(ci, u, Array.map (fun c -> klt info tab e c) pms, (zip_ctx p, r),
       NoInvert, m, Array.map zip_ctx br) in

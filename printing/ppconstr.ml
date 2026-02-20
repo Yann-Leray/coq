@@ -267,6 +267,13 @@ let pr_inside_universe_instance (ql,ul) =
 let pr_universe_instance l =
   pr_opt_no_spc (pr_univ_annot pr_inside_universe_instance) l
 
+let pr_sort_annot : sort_expr option -> Pp.t =
+  pr_opt_no_spc @@ pr_univ_annot (fun (q, u) ->
+  match q with
+  | None -> str "Type;" ++ spc() ++ pr_univ u
+  | Some q ->  pr_qvar_expr q ++ str ";" ++ spc () ++ pr_univ u
+  )
+
 let pr_reference qid =
   if qualid_is_ident qid then tag_var (pr_id @@ qualid_basename qid)
   else pr_qualid qid
@@ -569,9 +576,9 @@ let pr_case_item ~flags pr (tm,as_clause, in_clause) =
 let pr_case_type pr po =
   match po with
   | None -> mt ()
-  | Some { CAst.v = CHole h } when is_anonymous_hole h -> mt()
-  | Some p ->
-    spc() ++ hov 2 (keyword "return" ++ pr_sep_com spc (pr no_after lcase_type) p)
+  | Some ({ CAst.v = CHole h }, None) when is_anonymous_hole h -> mt()
+  | Some (p, s) ->
+    spc() ++ hov 2 (keyword "return" ++ pr_sort_annot s ++ pr_sep_com spc (pr no_after lcase_type) p)
 
 let pr_simple_return_type pr na po =
   (match na with

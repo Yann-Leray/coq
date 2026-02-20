@@ -618,7 +618,7 @@ let check_add_elimination_constraints ~primitive (entry, binders as univs) elim_
    this could be refactored as noted above by moving to the
    higher-level declare constant API *)
 let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
-    paramargs decl impls {CAst.v=fid; loc} subst nfi ti i indsp mib lifted_fields x rp record_quality elim_cstrs_map =
+    paramargs decl annot impls {CAst.v=fid; loc} subst nfi ti i indsp mib lifted_fields x rp record_quality elim_cstrs_map =
   let ccl = subst_projection fid subst ti in
   let body, p_opt = match decl with
     | LocalDef (_,ci,_) -> subst_projection fid subst ci, None
@@ -636,7 +636,7 @@ let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
         let ci = Inductiveops.make_case_info env indsp LetStyle in
         (* Record projections are always NoInvert because they're at
            constant relevance *)
-        mkCase (Inductive.contract_case env (ci, (p, rci), NoInvert, mkRel 1, [|branch|])), None
+        mkCase (Inductive.contract_case env (ci, (p, Option.get annot), NoInvert, mkRel 1, [|branch|])), None
   in
   let proj = it_mkLambda_or_LetIn (mkLambda (x, rp, body)) paramdecls in
   let proj_typ = it_mkProd_or_LetIn (mkProd (x, rp, ccl)) paramdecls in
@@ -681,7 +681,7 @@ let build_named_proj ~primitive ~flags ~univs ~uinstance ~kind env paramdecls
 (** [build_proj] will build a projection for each field, or skip if
    the field is anonymous, i.e. [_ : t] *)
 let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs record_quality ~uinstance ~kind ~univs
-    (elim_cstrs_map, nfi, i, kinds, subst) flags loc decl impls =
+    (elim_cstrs_map, nfi, i, kinds, subst) flags loc decl annot impls =
   let fi = RelDecl.get_name decl in
   let ti = RelDecl.get_type decl in
   let (elim_cstrs_map, sp_proj, i, subst) =
@@ -691,7 +691,7 @@ let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs r
     | Name fid ->
       let fid = CAst.make ?loc fid in
       try build_named_proj
-            ~primitive ~flags ~univs ~uinstance ~kind env paramdecls paramargs decl impls fid
+            ~primitive ~flags ~univs ~uinstance ~kind env paramdecls paramargs decl annot impls fid
             subst nfi ti i indsp mib lifted_fields x rp record_quality elim_cstrs_map
       with NotDefinable why as exn ->
         let _, info = Exninfo.capture exn in
@@ -707,7 +707,7 @@ let build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs r
 
 (** [declare_projections] prepares the common context for all record
    projections and then calls [build_proj] for each one. *)
-let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
+let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs annots fieldimpls =
   let env = Global.env() in
   let (mib,mip) = Global.lookup_inductive indsp in
   let uinstance =
@@ -724,6 +724,15 @@ let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
   let record_quality = Sorts.quality mip.mind_sort in
   let fields, _ = mip.mind_nf_lc.(0) in
   let fields = List.firstn mip.mind_consnrealdecls.(0) fields in
+  let annots =
+    let rec thread l1 l2 = match l1, l2 with
+    | LocalAssum _ :: l1, s :: l2 -> Some s :: thread l1 l2
+    | LocalDef _ :: l1, l2 -> None :: thread l1 l2
+    | [], [] -> []
+    | LocalAssum _ :: _, [] | [] , _ :: _ -> assert false
+    in
+    thread fields annots
+  in
   let paramdecls = Inductive.inductive_paramdecls (mib, uinstance) in
   let r = mkIndU (indsp,uinstance) in
   let rp = applist (r, Context.Rel.instance_list mkRel 0 paramdecls) in
@@ -741,9 +750,9 @@ let declare_projections indsp ~kind ~inhabitant_id flags ?fieldlocs fieldimpls =
     | Some fieldlocs -> fieldlocs
   in
   let (_, _, _, canonical_projections, _) =
-    List.fold_left4
+    List.fold_left5
       (build_proj env mib indsp primitive x rp lifted_fields paramdecls paramargs record_quality ~uinstance ~kind ~univs)
-      (elim_cstrs_map, List.length fields,0,[],[]) flags (List.rev fieldlocs) (List.rev fields) (List.rev fieldimpls)
+      (elim_cstrs_map, List.length fields,0,[],[]) flags (List.rev fieldlocs) (List.rev fields) (List.rev annots) (List.rev fieldimpls)
   in
     List.rev canonical_projections
 
@@ -920,11 +929,54 @@ let declare_structure (decl:Record_decl.t) ~schemes =
       ~default_dep_elim
       ~schemes
   in
-  let map i ({ RecordEntry.inhabitant_id; implfs; fieldlocs }, { Data.is_coercion; proj_flags; }) =
+  let annots =
+    let usubst = match decl.entry.mie.mind_entry_universes with
+    | Monomorphic_ind_entry ->
+      UVars.empty_sort_subst
+    | Template_ind_entry {uctx; default_univs} ->
+
+      (* Substitution from the template binders to the default univs (and qtype for the qvars)
+        XXX can this be simplified by composing template_abstract and default_univs?
+        don't forget to check the default_univs qualities are all QType if so *)
+      let template_usubst : UVars.sort_level_subst =
+        let open Univ in
+        let bind_instance = UVars.UContext.instance uctx in
+        let () = if not UVars.(eq_sizes (Instance.length bind_instance) (Instance.length default_univs))
+          then CErrors.anomaly Pp.(str "Inorrect default template universes declaration.")
+        in
+        let bind_qs, bind_us = UVars.Instance.to_array bind_instance in
+        let default_qs, default_us = UVars.Instance.to_array default_univs in
+        let qsubst = Array.fold_left2 (fun qsubst bind_q default_q ->
+            let open Sorts.Quality in
+            match bind_q, default_q with
+            | QConstant _, _ -> assert false
+            | QVar bind_q, QConstant QType ->
+              Sorts.QVar.Map.add bind_q default_q qsubst
+            | QVar _, _ -> CErrors.anomaly Pp.(str "Default template quality must be QType."))
+            Sorts.QVar.Map.empty
+            bind_qs default_qs
+        in
+        let usubst = Array.fold_left2 (fun usubst bind_u default_u ->
+            assert (not @@ Level.is_set bind_u);
+            Level.Map.add bind_u default_u usubst)
+            Level.Map.empty
+            bind_us default_us
+        in
+        qsubst, usubst
+      in
+
+      template_usubst
+    | Polymorphic_ind_entry uctx ->
+      let (inst, auctx) = UVars.abstract_universes uctx in
+      let usubst = UVars.make_instance_subst inst in
+      usubst
+    in
+    List.map (fun oie -> List.map (UVars.subst_sort_level_sort usubst) (Option.get oie.mind_entry_proj_annot)) decl.entry.mie.mind_entry_inds in
+  let map i ({ RecordEntry.inhabitant_id; implfs; fieldlocs }, { Data.is_coercion; proj_flags; }, annots) =
     let rsp = (kn, i) in (* This is ind path of idstruc *)
     let cstr = (rsp, 1) in
     let kind = decl.projections_kind in
-    let projections = declare_projections rsp ~kind ~inhabitant_id proj_flags ~fieldlocs implfs in
+    let projections = declare_projections rsp ~kind ~inhabitant_id proj_flags ~fieldlocs annots implfs in
     let build = GlobRef.ConstructRef cstr in
     let () = match is_coercion with
       | NoCoercion -> ()
@@ -934,7 +986,7 @@ let declare_structure (decl:Record_decl.t) ~schemes =
     let () = declare_structure_entry struc in
     GlobRef.IndRef rsp
   in
-  let data = List.combine decl.entry.ind_infos decl.records in
+  let data = List.combine3 decl.entry.ind_infos decl.records annots in
   let inds = List.mapi map data in
   Declared.Record kn, inds
 

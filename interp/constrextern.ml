@@ -953,13 +953,13 @@ let rec extern depth0 inctx scopes (eenv:extern_env) r =
       List.fold_right (Name.fold_right Id.Set.add)
         (cases_predicate_names tml) eenv.vars in
     let eenv' = { eenv with vars = vars' } in
-    let rtntypopt' = Option.map (extern_typ depth scopes eenv') rtntypopt in
+    let rtntypopt' = Option.map (fun (r, annot) -> extern_typ depth scopes eenv' r, Option.map (extern_glob_sort eenv.uvars) annot) rtntypopt in
     let tml = List.map (fun (tm,(na,x)) ->
                  let na' = match na, DAst.get tm with
                    | Anonymous, GVar id ->
                       begin match rtntypopt with
                             | None -> None
-                            | Some ntn ->
+                            | Some (ntn, _) ->
                                if occur_glob_constr id ntn then
                                  Some (CAst.make Anonymous)
                                else None
@@ -986,7 +986,7 @@ let rec extern depth0 inctx scopes (eenv:extern_env) r =
       let inctx = inctx || typopt <> None in
       CLetTuple (List.map CAst.make nal,
         (Option.map (fun _ -> (make na)) typopt,
-         Option.map (extern_typ depth scopes (add_vname eenv na)) typopt),
+         Option.map (fun (r, annot) -> extern_typ depth scopes (add_vname eenv na) r, Option.map (extern_glob_sort eenv.uvars) annot) typopt),
         sub_extern depth false scopes eenv tm,
         extern depth inctx scopes (List.fold_left add_vname eenv nal) b)
 
@@ -994,7 +994,7 @@ let rec extern depth0 inctx scopes (eenv:extern_env) r =
       let inctx = inctx || typopt <> None in
       CIf (sub_extern depth false scopes eenv c,
         (Option.map (fun _ -> (CAst.make na)) typopt,
-         Option.map (extern_typ depth scopes (add_vname eenv na)) typopt),
+         Option.map (fun (r, annot) -> extern_typ depth scopes (add_vname eenv na) r, Option.map (extern_glob_sort eenv.uvars) annot) typopt),
         sub_extern depth inctx scopes eenv b1, sub_extern depth inctx scopes eenv b2)
 
   | GRec (fk,idv,blv,tyv,bv) ->
@@ -1472,7 +1472,7 @@ let rec glob_of_pat
         | Some p, Some ind ->
           let nas, p = glob_of_pat_under_context (glob_of_pat of_extra) avoid env sigma p in
           let nas = Array.rev_to_list nas in
-          ((List.hd nas, Some (CAst.make (ind, List.tl nas))), Some p)
+          ((List.hd nas, Some (CAst.make (ind, List.tl nas))), Some (p,None))
         | _ -> anomaly (Pp.str "PCase with non-trivial predicate but unknown inductive.")
       in
       GCases (Constr.MatchStyle,rtn,[glob_of_pat of_extra avoid env sigma tm,indnames],mat)

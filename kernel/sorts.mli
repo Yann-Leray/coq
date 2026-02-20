@@ -203,6 +203,7 @@ val relevance_equal : relevance -> relevance -> bool
 
 val relevance_subst_fn : (QVar.t -> Quality.t) -> relevance -> relevance
 
+val relevance_of_quality : Quality.t -> relevance
 val relevance_of_sort : t -> relevance
 
 val is_relevant : relevance -> bool
@@ -210,6 +211,9 @@ val is_relevant : relevance -> bool
 val debug_print : t -> Pp.t
 val pr : (QVar.t -> Pp.t) -> (Univ.Universe.t -> Pp.t) -> t -> Pp.t
 val raw_pr : t -> Pp.t
+
+val pr_as_annot : (QVar.t -> Pp.t) -> (Univ.Universe.t -> Pp.t) -> t -> Pp.t
+val raw_pr_as_annot : t -> Pp.t
 
 type ('q, 'u) pattern =
   | PSProp | PSSProp | PSSet | PSType of 'u | PSGlobal of QGlobal.t * 'u | PSQSort of 'q * 'u

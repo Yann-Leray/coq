@@ -338,5 +338,5 @@ val get_indices : one_inductive_body -> einstance -> rel_context t
   *)
 val make_case_or_projections : naming_scheme -> mutual_inductive_body -> inductive -> one_inductive_body ->
   einstance -> access_key list -> access_key list -> constr array -> constr array ->
-  (access_key list -> access_key -> types t) -> erelevance -> constr ->
+  (access_key list -> access_key -> types t) -> esorts -> constr ->
   (access_key list * access_key list * access_key list * int -> constr t) -> constr t

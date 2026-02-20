@@ -107,6 +107,7 @@ module Internal : sig
     -> inhabitant_id:Names.Id.t
     -> Data.projection_flags list
     -> ?fieldlocs:Loc.t option list
+    -> Sorts.t list
     -> Impargs.manual_implicits list
     -> Structure.projection list
 

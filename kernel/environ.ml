@@ -800,7 +800,7 @@ let lookup_projection p env =
   | NotRecord | FakeRecord -> anomaly ~label:"lookup_projection" Pp.(str "not a projection")
   | PrimRecord { relevances; tys; _ } ->
     let arg = Projection.arg p in
-    relevances.(arg), tys.(arg)
+    Sorts.relevance_of_sort relevances.(arg), tys.(arg)
 
 let get_projection env ind ~proj_arg =
   let mib = lookup_mind (fst ind) env in

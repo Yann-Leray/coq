@@ -38,7 +38,7 @@ let relevance_of_projection_repr env (p, u) =
   | NotRecord | FakeRecord ->
     CErrors.anomaly ~label:"relevance_of_projection" Pp.(str "not a projection")
   | PrimRecord { relevances; _ }->
-    UVars.subst_instance_relevance u relevances.(Names.Projection.Repr.arg p)
+    UVars.subst_instance_relevance u (Sorts.relevance_of_sort relevances.(Names.Projection.Repr.arg p))
 
 let relevance_of_projection env (p,u) =
   relevance_of_projection_repr env (Names.Projection.repr p,u)
@@ -58,7 +58,7 @@ let rec relevance_of_term_extra env extra lft c =
   | App (c, _) -> relevance_of_term_extra env extra lft c
   | Const c -> relevance_of_constant env c
   | Construct c -> relevance_of_constructor env c
-  | Case (_, _, _, (_, r), _, _, _) -> r
+  | Case (_, _, _, (_, r), _, _, _) -> Sorts.relevance_of_sort r
   | Fix ((_,i),(lna,_,_)) -> (lna.(i)).binder_relevance
   | CoFix (i,(lna,_,_)) -> (lna.(i)).binder_relevance
   | Proj (_, r, _) -> r

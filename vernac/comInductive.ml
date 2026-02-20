@@ -362,6 +362,16 @@ let inductive_levels env evd ~poly ~indnames ~arities_explicit arities ctors =
   let arities = List.map (fun (arity,_,_,_) -> arity) inds in
   evd, List.split arities
 
+let make_annots env evd ctors =
+  let levels = List.map (List.map (compute_constructor_levels env evd)) ctors in
+  List.fold_left_map (fun evd ctors ->
+    match ctors with
+    | [] | _ :: _ :: _ -> evd, None
+    | [ctor] ->
+      let evd, ctor = List.fold_left_map (Evd.fresh_geq_sort env) evd ctor in
+      evd, Some ctor
+    ) evd levels
+
 (** Template poly ***)
 
 let check_named {CAst.loc;v=na} = match na with
@@ -597,13 +607,14 @@ let check_param = function
 | CLocalPattern {CAst.loc} ->
   Loc.raise ?loc (Gramlib.Grammar.ParseError "pattern with quote not allowed here")
 
-let restrict_inductive_universes sigma ctx_params arities constructors =
+let restrict_inductive_universes sigma ctx_params arities constructors annots =
   let merge_universes_of_constr c acc =
     Univ.Level.Set.union acc (snd (EConstr.universes_of_constr sigma c)) in
   let uvars = Univ.Level.Set.empty in
   let uvars = List.fold_left (fun acc d -> Context.Rel.Declaration.fold_constr merge_universes_of_constr d acc) uvars ctx_params in
   let uvars = List.fold_right merge_universes_of_constr arities uvars in
   let uvars = List.fold_right (fun (_,ctypes) -> List.fold_right merge_universes_of_constr ctypes) constructors uvars in
+  let uvars = List.fold_right (Option.fold_right (List.fold_right (fun s uvars -> merge_universes_of_constr (EConstr.mkSort s) uvars))) annots uvars in
   Evd.restrict_universe_context sigma uvars
 
 let check_trivial_variances variances =
@@ -640,6 +651,7 @@ let interp_mutual_inductive_constr ~sigma ~flags ~udecl ~variances ~ctx_params ~
         tys)
       constructors
   in
+  let sigma, annots = make_annots env_ar_params sigma ctor_args in
   let sigma, (default_dep_elim, arities) = inductive_levels env_ar_params sigma ~poly ~indnames ~arities_explicit arities ctor_args in
   (* we must minimize before inferring template info.
      For instance before minimization "option" is "option : Type@{u} -> Type@{v}" with "u <= v".
@@ -650,7 +662,7 @@ let interp_mutual_inductive_constr ~sigma ~flags ~udecl ~variances ~ctx_params ~
      (ie v <= template_u with v getting restricted away). *)
   let collapse_sort_variables = PolyFlags.collapse_sort_variables poly in
   let sigma = Evd.minimize_universes ~collapse_sort_variables:(not collapse_sort_variables) ~to_type:collapse_sort_variables sigma in
-  let sigma = restrict_inductive_universes sigma ctx_params arities constructors in
+  let sigma = restrict_inductive_universes sigma ctx_params arities constructors annots in
 
   let sigma, univ_entry, ubinders, global_univs =
     inductive_univs sigma ~user_template:template ~poly udecl
@@ -661,15 +673,17 @@ let interp_mutual_inductive_constr ~sigma ~flags ~udecl ~variances ~ctx_params ~
   let arities = List.map EConstr.(to_constr sigma) arities in
   let constructors = List.map (on_snd (List.map (EConstr.to_constr sigma))) constructors in
   let ctx_params = List.map (fun d -> EConstr.to_rel_decl sigma d) ctx_params in
+  let annots = List.map (Option.map (List.map (ESorts.kind sigma))) annots in
 
   (* Build the inductive entries *)
-  let entries = List.map3 (fun indname arity (cnames,ctypes) ->
+  let entries = List.map4 (fun indname arity (cnames,ctypes) annot ->
       { mind_entry_typename = indname;
         mind_entry_arity = arity;
         mind_entry_consnames = cnames;
-        mind_entry_lc = ctypes
+        mind_entry_lc = ctypes;
+        mind_entry_proj_annot = annot;
       })
-      indnames arities constructors
+      indnames arities constructors annots
   in
   let variance = variance_of_entry ~cumulative:(PolyFlags.cumulative poly) ~variances univ_entry in
   (* Build the mutual inductive entry *)
