@@ -1485,7 +1485,7 @@ struct
       let ind,_ = dest_ind_family indf in
       let pred = nf_evar sigma pred in
       let sigma, s = Typing.check_allowed_sort !!env sigma ind cj.uj_val pred in
-        let sigma, annot = pretype_sort_annot ~flags env sigma annot s in
+      let sigma, annot = pretype_sort_annot ~flags env sigma annot s in
       let ci = make_case_info !!env (fst ind) IfStyle in
       sigma,
         mkCase (EConstr.contract_case !!env sigma

@@ -1207,7 +1207,7 @@ let check_quality_constraints evd qcst =
 let fresh_geq_sort ?loc ?(rigid=univ_flexible) ?annot env evd s =
   match annot with
   | None ->
-    if Univ.Level.Set.cardinal (Sorts.levels s) <= 1 then
+    if Univ.Universe.is_level (Sorts.univ_of_sort s) then
       evd, s
     else
       let evd, l = new_univ_variable ?loc rigid evd in
