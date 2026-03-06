@@ -291,7 +291,7 @@ and nf_stk ?from:(from=0) env sigma c t stk  =
         expand_arity (mib, mip) (ind, u) params (Array.of_list nas)
       in
       let p, s = nf_predicate env sigma (ind,u) mip params (type_of_switch sw) pctx in
-      let sigma, annot = Evd.fresh_geq_sort ~rigid:Evd.univ_flexible env sigma s in
+      let sigma, annot = Evd.fresh_geq_sort ~rigid:Evd.univ_flexible sigma s in
       let annot = EConstr.ESorts.kind sigma annot in
       let relevance = Sorts.relevance_of_sort annot in
       (* Calcul du type des branches *)

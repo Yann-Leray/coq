@@ -1502,7 +1502,7 @@ let compile ~program_mode sigma pb =
                 pred current indt (names,dep) tomatch
             in
             let sigma, s = Typing.check_allowed_sort !!(pb.env) sigma mind current pred in
-            let sigma, annot = Evd.fresh_geq_sort ~rigid:univ_flexible !!(pb.env) ?annot:pb.annot sigma s in
+            let sigma, annot = Evd.fresh_geq_sort ~rigid:univ_flexible ?annot:pb.annot sigma s in
             let ci = make_case_info !!(pb.env) (fst mind) pb.casestyle in
             let pred = nf_betaiota !!(pb.env) sigma pred in
             let case = make_case_or_project !!(pb.env) sigma indt ci (pred, annot) current brvals in

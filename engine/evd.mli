@@ -667,7 +667,7 @@ val fresh_global : ?loc:Loc.t -> ?rigid:rigid -> ?names:einstance -> env ->
   evar_map -> GlobRef.t -> evar_map * econstr
 
 val fresh_geq_sort : ?loc:Loc.t -> ?rigid:rigid -> ?annot:esorts
-  -> env -> evar_map -> esorts -> evar_map * esorts
+  -> evar_map -> esorts -> evar_map * esorts
 
 (** Partially constructed constrs. *)
 

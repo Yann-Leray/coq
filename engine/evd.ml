@@ -1204,7 +1204,7 @@ let check_quality_constraints evd qcst =
   let qcst = UVars.QPairSet.fold fold qcst UnivProblem.Set.empty in
   UState.check_constraints evd.universes qcst
 
-let fresh_geq_sort ?loc ?(rigid=univ_flexible) ?annot env evd s =
+let fresh_geq_sort ?loc ?(rigid=univ_flexible) ?annot evd s =
   match annot with
   | None ->
     if Univ.Universe.is_level (Sorts.univ_of_sort s) then

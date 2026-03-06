@@ -368,7 +368,7 @@ let make_annots env evd ctors =
     match ctors with
     | [] | _ :: _ :: _ -> evd, None
     | [ctor] ->
-      let evd, ctor = List.fold_left_map (Evd.fresh_geq_sort env) evd ctor in
+      let evd, ctor = List.fold_left_map Evd.fresh_geq_sort evd ctor in
       evd, Some ctor
     ) evd levels
 

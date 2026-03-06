@@ -591,7 +591,7 @@ let pretype_sort ?loc ~flags sigma s =
 
 let pretype_sort_annot ?loc ~flags env sigma annot s =
   let evd, annot = Option.fold_left_map (sort ?loc ~flags) sigma annot in
-  Evd.fresh_geq_sort ?loc !!env evd ~rigid:univ_flexible ?annot s
+  Evd.fresh_geq_sort ?loc evd ~rigid:univ_flexible ?annot s
 
 let new_typed_evar env sigma ?naming ?rrpat ~src tycon =
   match tycon with
