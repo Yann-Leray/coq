@@ -966,10 +966,12 @@ let on_array discr =
 let on_fixpoints trees i spec j =
   lazy begin match Lazy.force spec with
   | DeadCode | Vars _ | NotSubterm as spec -> spec
-  | Subterm (size, tree, vars) ->
+  | Subterm (_, tree, vars) as spec ->
     if WfPaths.incl trees.(i) tree then
-      let size = if Int.equal i j then size else Strict in
-      Subterm (size, trees.(j), vars)
+      if Int.equal i j then
+        spec
+      else
+        Subterm (Strict, trees.(j), vars)
     else
       NotSubterm
   end
