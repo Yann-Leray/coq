@@ -671,6 +671,40 @@ let contract_cofix (bodynum,(_,_,bodies as typedbodies)) =
 *)
 
 
+
+(*************************************)
+(* Exported utilities for positivity *)
+
+let is_primitive_positive_container env c =
+  match (Environ.retroknowledge env).Retroknowledge.retro_array with
+  | Some c' when QConstant.equal env c c' -> true
+  | _ -> false
+
+(* This removes global parameters of the inductive types in lc (for
+   nested inductive types only ) *)
+let dummy_univ = Level.(make (UGlobal.make (DirPath.make [Id.of_string "implicit"]) "" 0))
+let dummy_implicit_sort = mkType (Universe.make dummy_univ)
+let lambda_implicit n a =
+  let anon = Context.make_annot Anonymous Sorts.Relevant in
+  let lambda_implicit a = mkLambda (anon, dummy_implicit_sort, a) in
+  iterate lambda_implicit n a
+
+let abstract_mind_lc ntyps npars mind lc =
+  let lc = Array.map (fun (ctx, c) -> Term.it_mkProd_or_LetIn c ctx) lc in
+  let rec replace_ind k c =
+    let hd, args = decompose_app_list c in
+    match kind hd with
+    | Ind ((mind',i),_) when MutInd.CanOrd.equal mind mind' ->
+      let rec drop_params n = function
+        | _ :: args when n > 0 -> drop_params (n-1) args
+        | args -> lambda_implicit n (Term.applist (mkRel (ntyps+n+k-i), List.Smart.map (replace_ind (n+k)) args))
+      in
+      drop_params npars args
+    | _ -> map_with_binders succ replace_ind k c
+  in
+  Array.map (replace_ind 0) lc
+
+
 (************************************************************************)
 (* Subterm information *)
 
@@ -678,15 +712,11 @@ module WfPaths :
 sig
 type t
 val lookup_subterms : env -> inductive -> t
-val lookup_mutual_subterms : env -> MutInd.t -> t array
 val inter : t -> t -> t
-val restrict : t -> wf_paths -> t
 val dest_subterm : t -> int -> int -> t
-val dest_subterms : t -> t array array
 val is_norec : t -> bool
-val is_inductive : env -> inductive -> t -> bool
-val is_primitive_positive_container : env -> Constant.t -> t -> bool
 val incl : t -> t -> bool
+val prune_path : ?evars:CClosure.evar_handler -> env -> t -> pinductive -> types list -> t
 
 end =
 struct
@@ -754,40 +784,135 @@ let incl t1 t2 =
   let t12 = inter t1 t2 in
   equal t1 t12
 
-end
 
-(*************************************)
-(* Exported utilities for positivity *)
+(* The following functions are almost duplicated from indtypes.ml, except
+that they carry here a poorer environment (containing less information). *)
+let ienv_push_var (env, lra) (x,a,ra) =
+  (push_rel (LocalAssum (x,a)) env, (Norec,ra)::lra)
 
-let is_primitive_positive_container env c =
-  match (Environ.retroknowledge env).Retroknowledge.retro_array with
-  | Some c' when QConstant.equal env c c' -> true
-  | _ -> false
-
-(* This removes global parameters of the inductive types in lc (for
-   nested inductive types only ) *)
-let dummy_univ = Level.(make (UGlobal.make (DirPath.make [Id.of_string "implicit"]) "" 0))
-let dummy_implicit_sort = mkType (Universe.make dummy_univ)
-let lambda_implicit n a =
-  let anon = Context.make_annot Anonymous Sorts.Relevant in
-  let lambda_implicit a = mkLambda (anon, dummy_implicit_sort, a) in
-  iterate lambda_implicit n a
-
-let abstract_mind_lc ntyps npars mind lc =
-  let lc = Array.map (fun (ctx, c) -> Term.it_mkProd_or_LetIn c ctx) lc in
-  let rec replace_ind k c =
-    let hd, args = decompose_app_list c in
-    match kind hd with
-    | Ind ((mind',i),_) when MutInd.CanOrd.equal mind mind' ->
-      let rec drop_params n = function
-        | _ :: args when n > 0 -> drop_params (n-1) args
-        | args -> lambda_implicit n (Term.applist (mkRel (ntyps+n+k-i), List.Smart.map (replace_ind (n+k)) args))
-      in
-      drop_params npars args
-    | _ -> map_with_binders succ replace_ind k c
+let ienv_push_inductive ?evars (env, ra_env) ((mind,u),lpar) =
+  let mib = Environ.lookup_mind mind env in
+  let ntypes = Declareops.mind_ntypes mib in
+  let push_ind mip env =
+    let r = relevance_of_ind_body mip u in
+    let anon = Context.make_annot Anonymous r in
+    let decl = LocalAssum (anon, hnf_prod_applist ?evars env (type_of_inductive ((mib,mip),u)) lpar) in
+    push_rel decl env
   in
-  Array.map (replace_ind 0) lc
+  let env = Array.fold_right push_ind mib.mind_packets env in
+  let rc = Array.mapi (fun j t -> Mrec (RecArgInd (mind,j)),t) (Rtree.mk_rec_calls ntypes) in
+  let lra_ind = Array.rev_to_list rc in
+  let ra_env = List.map (fun (r,t) -> (r,Rtree.lift ntypes t)) ra_env in
+  (env, lra_ind @ ra_env)
 
+let rec ienv_decompose_prod ?evars (env,_ as ienv) n c =
+ if Int.equal n 0 then (ienv,c) else
+   let c' = whd_all ?evars env c in
+   match kind c' with
+   Prod(na,a,b) ->
+     let ienv' = ienv_push_var ienv (na,a,mk_norec) in
+     ienv_decompose_prod ?evars ienv' (n-1) b
+     | _ -> assert false
+
+(* [get_recargs_approx env tree ind args] builds an approximation of the recargs
+tree for ind, knowing args. The argument tree is used to know when candidate
+nested types should be traversed, pruning the tree otherwise. This code is very
+close to check_positive in indtypes.ml, but does no positivity check and does not
+compute the number of recursive arguments. *)
+let get_recargs_approx ?evars env tree ind args =
+  let rec build_recargs (env, ra_env as ienv) tree c =
+    let x,largs = decompose_app_list (whd_all ?evars env c) in
+    match kind x with
+    | Prod (na,b,d) ->
+       assert (List.is_empty largs);
+       build_recargs (ienv_push_var ienv (na, b, mk_norec)) tree d
+    | Rel k ->
+       (* Free variables are allowed and assigned Norec *)
+       (try snd (List.nth ra_env (k-1))
+        with Failure _ | Invalid_argument _ -> mk_norec)
+    | Ind ind_kn ->
+       (* When the inferred tree allows it, we consider that we have a potential
+       nested inductive type *)
+      if is_inductive env (fst ind_kn) tree then
+        build_recargs_nested ienv tree (ind_kn, largs)
+      else mk_norec
+    | Const (c, _) ->
+      if is_primitive_positive_container env c tree then
+        build_recargs_nested_primitive ienv tree (c, largs)
+      else mk_norec
+    | _err ->
+       mk_norec
+
+  and build_recargs_nested (env,_ra_env as ienv) tree (((mind,i),u), largs) =
+    (* If the inferred tree already disallows recursion, no need to go further *)
+    if is_norec tree then mk_norec
+    else
+    let mib = Environ.lookup_mind mind env in
+    let nonrecpar = mib.mind_nparams - mib.mind_nparams_rec in
+    let (lpar,_) = List.chop mib.mind_nparams_rec largs in
+    let auxntyp = Declareops.mind_ntypes mib in
+    (* Extends the environment with a variable corresponding to
+             the inductive def *)
+    let (env',_ as ienv') = ienv_push_inductive ?evars ienv ((mind,u),lpar) in
+    (* Parameters expressed in env' *)
+    let lpar' = List.map (lift auxntyp) lpar in
+    (* In case of mutual inductive types, we use the recargs tree which was
+    computed statically. This is fine because nested inductive types with
+    mutually recursive containers are not supported. *)
+    let trees =
+      if Int.equal auxntyp 1 then [|tree|]
+      else lookup_mutual_subterms env mind
+    in
+    let mk_irecargs j mip =
+      (* The nested inductive type with parameters removed *)
+      let auxlcvect = abstract_mind_lc auxntyp mib.mind_nparams_rec mind mip.mind_nf_lc in
+      let paths = Array.mapi
+        (fun k c ->
+         let c' = hnf_prod_applist ?evars env' c lpar' in
+         (* skip non-recursive parameters *)
+         let (ienv',c') = ienv_decompose_prod ?evars ienv' nonrecpar c' in
+         build_recargs_constructors ienv' trees.(j) k c')
+        auxlcvect
+      in
+      mk_paths (Mrec (RecArgInd (mind,j))) paths
+    in
+    let irecargs = Array.mapi mk_irecargs mib.mind_packets in
+    (Rtree.mk_rec irecargs).(i)
+
+  and build_recargs_nested_primitive (env, ra_env) tree (c, largs) =
+    if is_norec tree then mk_norec
+    else
+    let ntypes = 1 in (* Primitive types are modelled by non-mutual inductive types *)
+    let ra_env = List.map (fun (r,t) -> (r,Rtree.lift ntypes t)) ra_env in
+    let ienv = (env, ra_env) in
+    let paths = List.map2 (build_recargs ienv) (Array.to_list (dest_subterms tree).(0)) largs in
+    let recargs = [| mk_paths (Mrec (RecArgPrim c)) [| paths |] |] in
+    (Rtree.mk_rec recargs).(0)
+
+  and build_recargs_constructors ienv trees k c =
+    let rec recargs_constr_rec (env,_ra_env as ienv) i lrec c =
+      let x,largs = decompose_app_list (whd_all ?evars env c) in
+        match kind x with
+
+          | Prod (na,b,d) ->
+             let () = assert (List.is_empty largs) in
+             let recarg = build_recargs ienv (dest_subterm trees k i) b in
+             let ienv' = ienv_push_var ienv (na,b,mk_norec) in
+             recargs_constr_rec ienv' (i+1) (recarg::lrec) d
+          | _hd ->
+             List.rev lrec
+    in
+    recargs_constr_rec ienv 0 [] c
+  in
+  (* starting with ra_env = [] seems safe because any unbounded Rel will be
+  assigned Norec *)
+  build_recargs_nested (env,[]) tree (ind, args)
+
+let prune_path ?evars env tree ind args =
+  let recargs = get_recargs_approx ?evars env tree ind args in
+  restrict tree recargs
+
+end
 
 (*****************************************************************************)
 (* Subterm specification *)
@@ -845,9 +970,6 @@ val on_fixpoints : WfPaths.t array -> int -> t lazy_t -> int -> t lazy_t
 
 val prune_path : ?evars:CClosure.evar_handler ->
   env -> t -> pinductive -> types list -> t
-
-val prune_path_tree : ?evars:CClosure.evar_handler ->
-  env -> WfPaths.t -> pinductive -> types list -> WfPaths.t option
 
 end = struct
 
@@ -970,150 +1092,18 @@ let on_fixpoints trees i spec j =
     if WfPaths.incl trees.(i) tree then
       if Int.equal i j then
         spec
+        (* Subterm (size, trees.(i), vars) *)
       else
         Subterm (Strict, trees.(j), vars)
     else
       NotSubterm
   end
 
-
-(* The following functions are almost duplicated from indtypes.ml, except
-that they carry here a poorer environment (containing less information). *)
-let ienv_push_var (env, lra) (x,a,ra) =
-  (push_rel (LocalAssum (x,a)) env, (Norec,ra)::lra)
-
-let ienv_push_inductive ?evars (env, ra_env) ((mind,u),lpar) =
-  let mib = Environ.lookup_mind mind env in
-  let ntypes = Declareops.mind_ntypes mib in
-  let push_ind mip env =
-    let r = relevance_of_ind_body mip u in
-    let anon = Context.make_annot Anonymous r in
-    let decl = LocalAssum (anon, hnf_prod_applist ?evars env (type_of_inductive ((mib,mip),u)) lpar) in
-    push_rel decl env
-  in
-  let env = Array.fold_right push_ind mib.mind_packets env in
-  let rc = Array.mapi (fun j t -> Mrec (RecArgInd (mind,j)),t) (Rtree.mk_rec_calls ntypes) in
-  let lra_ind = Array.rev_to_list rc in
-  let ra_env = List.map (fun (r,t) -> (r,Rtree.lift ntypes t)) ra_env in
-  (env, lra_ind @ ra_env)
-
-let rec ienv_decompose_prod ?evars (env,_ as ienv) n c =
- if Int.equal n 0 then (ienv,c) else
-   let c' = whd_all ?evars env c in
-   match kind c' with
-   Prod(na,a,b) ->
-     let ienv' = ienv_push_var ienv (na,a,mk_norec) in
-     ienv_decompose_prod ?evars ienv' (n-1) b
-     | _ -> assert false
-
-(* [get_recargs_approx env tree ind args] builds an approximation of the recargs
-tree for ind, knowing args. The argument tree is used to know when candidate
-nested types should be traversed, pruning the tree otherwise. This code is very
-close to check_positive in indtypes.ml, but does no positivity check and does not
-compute the number of recursive arguments. *)
-let get_recargs_approx ?evars env tree ind args =
-  let rec build_recargs (env, ra_env as ienv) tree c =
-    let x,largs = decompose_app_list (whd_all ?evars env c) in
-    match kind x with
-    | Prod (na,b,d) ->
-       assert (List.is_empty largs);
-       build_recargs (ienv_push_var ienv (na, b, mk_norec)) tree d
-    | Rel k ->
-       (* Free variables are allowed and assigned Norec *)
-       (try snd (List.nth ra_env (k-1))
-        with Failure _ | Invalid_argument _ -> mk_norec)
-    | Ind ind_kn ->
-       (* When the inferred tree allows it, we consider that we have a potential
-       nested inductive type *)
-      if WfPaths.is_inductive env (fst ind_kn) tree then
-        build_recargs_nested ienv tree (ind_kn, largs)
-      else mk_norec
-    | Const (c, _) ->
-      if WfPaths.is_primitive_positive_container env c tree then
-        build_recargs_nested_primitive ienv tree (c, largs)
-      else mk_norec
-    | _err ->
-       mk_norec
-
-  and build_recargs_nested (env,_ra_env as ienv) tree (((mind,i),u), largs) =
-    (* If the inferred tree already disallows recursion, no need to go further *)
-    if WfPaths.is_norec tree then mk_norec
-    else
-    let mib = Environ.lookup_mind mind env in
-    let nonrecpar = mib.mind_nparams - mib.mind_nparams_rec in
-    let (lpar,_) = List.chop mib.mind_nparams_rec largs in
-    let auxntyp = Declareops.mind_ntypes mib in
-    (* Extends the environment with a variable corresponding to
-             the inductive def *)
-    let (env',_ as ienv') = ienv_push_inductive ?evars ienv ((mind,u),lpar) in
-    (* Parameters expressed in env' *)
-    let lpar' = List.map (lift auxntyp) lpar in
-    (* In case of mutual inductive types, we use the recargs tree which was
-    computed statically. This is fine because nested inductive types with
-    mutually recursive containers are not supported. *)
-    let trees =
-      if Int.equal auxntyp 1 then [|tree|]
-      else WfPaths.lookup_mutual_subterms env mind
-    in
-    let mk_irecargs j mip =
-      (* The nested inductive type with parameters removed *)
-      let auxlcvect = abstract_mind_lc auxntyp mib.mind_nparams_rec mind mip.mind_nf_lc in
-      let paths = Array.mapi
-        (fun k c ->
-         let c' = hnf_prod_applist ?evars env' c lpar' in
-         (* skip non-recursive parameters *)
-         let (ienv',c') = ienv_decompose_prod ?evars ienv' nonrecpar c' in
-         build_recargs_constructors ienv' trees.(j) k c')
-        auxlcvect
-      in
-      mk_paths (Mrec (RecArgInd (mind,j))) paths
-    in
-    let irecargs = Array.mapi mk_irecargs mib.mind_packets in
-    (Rtree.mk_rec irecargs).(i)
-
-  and build_recargs_nested_primitive (env, ra_env) tree (c, largs) =
-    if WfPaths.is_norec tree then mk_norec
-    else
-    let ntypes = 1 in (* Primitive types are modelled by non-mutual inductive types *)
-    let ra_env = List.map (fun (r,t) -> (r,Rtree.lift ntypes t)) ra_env in
-    let ienv = (env, ra_env) in
-    let paths = List.map2 (build_recargs ienv) (Array.to_list (WfPaths.dest_subterms tree).(0)) largs in
-    let recargs = [| mk_paths (Mrec (RecArgPrim c)) [| paths |] |] in
-    (Rtree.mk_rec recargs).(0)
-
-  and build_recargs_constructors ienv trees k c =
-    let rec recargs_constr_rec (env,_ra_env as ienv) i lrec c =
-      let x,largs = decompose_app_list (whd_all ?evars env c) in
-        match kind x with
-
-          | Prod (na,b,d) ->
-             let () = assert (List.is_empty largs) in
-             let recarg = build_recargs ienv (WfPaths.dest_subterm trees k i) b in
-             let ienv' = ienv_push_var ienv (na,b,mk_norec) in
-             recargs_constr_rec ienv' (i+1) (recarg::lrec) d
-          | _hd ->
-             List.rev lrec
-    in
-    recargs_constr_rec ienv 0 [] c
-  in
-  (* starting with ra_env = [] seems safe because any unbounded Rel will be
-  assigned Norec *)
-  build_recargs_nested (env,[]) tree (ind, args)
-
-let prune_path_tree ?evars env tree ind args =
-  let recargs = get_recargs_approx ?evars env tree ind args in
-  let tree = WfPaths.restrict tree recargs in
-  if WfPaths.is_norec tree then
-    None
-  else
-    Some tree
-
 let prune_path ?evars env spec ind args =
   match spec with
   | DeadCode | Vars _ | NotSubterm as spec -> spec
   | Subterm (size, tree, vars) ->
-    let recargs = get_recargs_approx ?evars env tree ind args in
-    let tree = WfPaths.restrict tree recargs in
+    let tree = WfPaths.prune_path ?evars env tree ind args in
     spec_of_tree size vars tree
 
 end
@@ -1273,7 +1263,8 @@ let apply_filter_tree ?evars tree = function
   | Pass -> Some tree
   | Block -> None
   | Prune (env, ind, args) ->
-    Subterm.prune_path_tree ?evars env tree ind args
+    let tree = WfPaths.prune_path ?evars env tree ind args in
+    if WfPaths.is_norec tree then None else Some tree
 
 (** In context [env = pctx, Δ], with [|pctx| = pctxlen] and [|Δ| = k],
     returns what filter needs to be applied to [elt] from [t] *)
