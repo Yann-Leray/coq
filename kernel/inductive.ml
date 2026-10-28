@@ -1134,7 +1134,9 @@ let push_fix_renv renv mode (_,v,_ as recdef) =
     genv = iterate (fun ge -> Subterm.lazy_from_mode mode :: ge) n renv.genv }
 
 (* Definition and manipulation of the stack *)
-type stack = Subterm.t Lazy.t list
+type stack = ((int * constr) option * Subterm.t Lazy.t) list
+
+let lift_stack n : stack -> stack = List.map (on_fst (Option.map (on_fst ((+) n))))
 
 (******************************)
 (* {6 Computing the recursive subterms of a term (propagation of size
@@ -1204,7 +1206,7 @@ let filter_predicate_stack ?evars pctxlen env p stack =
       | elt :: stack ->
         match kind (whd_all ?evars env p) with
         | Prod (na, ty, p) ->
-          let elt = on_hyp env k ty elt in
+          let elt = on_snd (on_hyp env k ty) elt in
           let env = Environ.push_rel (LocalAssum (na, ty)) env in
           filter_stack env (k+1) p (elt :: res) stack
         | _ -> env, k, p, List.rev res
@@ -1258,7 +1260,7 @@ let rec subterm_specif ?evars renv stack t =
   let f, l = decompose_app (whd_all ?evars renv.env t) in
   let stack =
     Array.fold_right
-    (fun t stack -> lazy_subterm_specif ?evars renv [] t :: stack)
+    (fun t stack -> (Some (0, t), lazy_subterm_specif ?evars renv [] t) :: stack)
     l stack
   in
   match kind f with
@@ -1277,7 +1279,7 @@ let rec subterm_specif ?evars renv stack t =
     let stl =
       Array.map2_i (fun i brctx (_, br) ->
         let renv = push_branch_renv (fun renv t -> lazy_subterm_specif ?evars renv [] t) renv brctx (constrargs_spec i) in
-        (* No need to lift stack as term closures were abstracted out. *)
+        let stack = lift_stack (List.length brctx) stack in
         subterm_specif ?evars renv stack br)
         brctxs brs
     in
@@ -1306,7 +1308,7 @@ let rec subterm_specif ?evars renv stack t =
         let renv =
           if List.length stack < decrArg + 1 then renv
           else
-            let arg_spec = List.nth stack decrArg in
+            let _, arg_spec = List.nth stack decrArg in
             assign_var_spec renv (1, arg_spec)
         in
         subterm_specif ?evars renv [] strippedBody
@@ -1314,6 +1316,7 @@ let rec subterm_specif ?evars renv stack t =
     | Lambda (x,a,b) ->
       let () = assert (Array.is_empty l) in
       let spec,stack' = extract_stack stack in
+      let stack' = lift_stack 1 stack' in
       subterm_specif ?evars (push_var renv (x,a,spec)) stack' b
 
       (* Evars are considered OK *)
@@ -1346,7 +1349,7 @@ and lazy_subterm_specif ?evars renv stack t =
 
 and extract_stack = function
   | [] -> Subterm.lazy_not_subterm, []
-  | elt :: l -> elt, l
+  | (_, elt) :: l -> elt, l
 
 and primitive_specif ?evars renv op args =
   let open CPrimitives in
@@ -1363,9 +1366,8 @@ and primitive_specif ?evars renv op args =
 
 exception FixGuardError of env * fix_guard_error
 
-let illegal_rec_call renv fx = function
-  | _ ->
-    let le_lt_vars =
+let illegal_rec_call renv fx o =
+  let le_lt_vars =
     lazy (let (_,le_vars,lt_vars) =
       List.fold_left
         (fun (i,le,lt) sbt ->
@@ -1375,7 +1377,11 @@ let illegal_rec_call renv fx = function
             | _ -> (i+1, le ,lt))
         (1,[],[]) renv.genv in
           (le_vars,lt_vars)) in
-    RecursionOnIllegalTerm(fx,(renv.env, mkProp),le_lt_vars)
+  match o with
+  | Some (n, t) ->
+    RecursionOnIllegalTerm(fx, (renv.env, lift n t),le_lt_vars)
+  | None ->
+    NotEnoughArgumentsForFixCall fx
 
 
 let find_uniform_parameters illformed ?evars env recindx bodies =
@@ -1440,7 +1446,7 @@ let drop_uniform_parameters nuniformparams bodies =
 (** Returns the new renv, stack, body and whether the lambda is properly erased *)
 let pop_argument mode (stack : stack) : Subterm.t lazy_t * stack =
   match stack with
-  | spec :: stack ->
+  | (_, spec) :: stack ->
     spec, stack
   | [] ->
     Subterm.lazy_from_mode mode, []
@@ -1505,7 +1511,7 @@ let check_one_fix ?evars renv recpos trees def =
     let () = Array.iter (check_term renv mode) args in
     let stack =
       Array.fold_right
-      (fun t stack -> lazy_subterm_specif ?evars renv [] t :: stack)
+      (fun t stack -> (Some (0, t), lazy_subterm_specif ?evars renv [] t) :: stack)
       args stack
     in
     match kind hd with
@@ -1524,6 +1530,7 @@ let check_one_fix ?evars renv recpos trees def =
       let () = check_stack renv mode [] ty in
       let spec, stack = pop_argument mode stack in
       let renv = push_var renv (na, ty, spec) in
+      let stack = lift_stack 1 stack in
       check_stack renv mode stack b
 
     | CoFix (_, (_, typarray, bodies as recdef)) ->
@@ -1592,7 +1599,7 @@ let check_one_fix ?evars renv recpos trees def =
           let () =
             Array.iter2_i (fun i brctx (_, br) ->
               let renv = push_branch_renv (fun renv t -> lazy_subterm_specif ?evars renv [] t) renv brctx (constrargs_spec i) in
-              (* No need to lift stack as term closures were abstracted out. *)
+              let filtered_stack = lift_stack (List.length brctx) filtered_stack in
               check_stack renv mode filtered_stack br)
               brctxs brs
           in
@@ -1616,7 +1623,7 @@ let check_one_fix ?evars renv recpos trees def =
       | App (hd, args) ->
         let stack' =
           Array.fold_right
-          (fun t stack -> lazy_subterm_specif ?evars renv [] t :: stack)
+          (fun t stack -> (Some (0, t), lazy_subterm_specif ?evars renv [] t) :: stack)
           args stack
         in
         let r = check_reduce renv stack' hd in
@@ -1685,10 +1692,10 @@ let check_one_fix ?evars renv recpos trees def =
       else
         (* Retrieve the expected tree for the argument *)
         (* Check the decreasing arg is smaller *)
-        let z = List.nth stack np in
+        let (t, z) = List.nth stack np in
         begin match Subterm.check (Lazy.force z) trees.(glob) with
         | true -> Neutral Check
-        | false -> raise (FixGuardError (renv.env, illegal_rec_call renv glob z))
+        | false -> raise (FixGuardError (renv.env, illegal_rec_call renv glob t))
         end
 
   | Rel n ->
@@ -1726,15 +1733,15 @@ let check_one_fix ?evars renv recpos trees def =
     let decrarg_spec =
       match List.nth_opt stack recindx.(i) with
       | Some spec -> spec
-      | None -> Subterm.lazy_from_mode mode
+      | None -> None, Subterm.lazy_from_mode mode
     in
     let internal_trees = find_mutfix_trees ?evars renv.env renv'.env recindx recdef in
 
     Array.iter2_i (fun j recindx body ->
-      let decrarg_spec = Subterm.on_fixpoints internal_trees i decrarg_spec j in
+      let decrarg_spec = on_snd (fun spec -> Subterm.on_fixpoints internal_trees i spec j) decrarg_spec in
       let stack =
-        List.make (nuniformparams - nuniform_realargs) (Subterm.lazy_from_mode mode) @
-        List.make (recindx - nuniformparams) Subterm.lazy_not_subterm @ [decrarg_spec] in
+        List.make (nuniformparams - nuniform_realargs) (None, Subterm.lazy_from_mode mode) @
+        List.make (recindx - nuniformparams) (None, Subterm.lazy_not_subterm) @ [decrarg_spec] in
       check_stack renv' mode stack (mkApp (body, uniform_args)))
       recindx bodies
   in
